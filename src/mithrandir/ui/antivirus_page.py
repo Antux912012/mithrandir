@@ -4,7 +4,7 @@ import gi
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, GLib, Gio
+from gi.repository import Gtk, Adw, GLib, Gio, Gdk
 
 from ..backend.antivirus_clamav import (
     ClamAVEngine,
@@ -135,6 +135,95 @@ class AntivirusPage(Gtk.ScrolledWindow):
         except Exception:
             self.auto_update_switch.set_active(True)
         self.status_group.add(self.auto_update_switch)
+
+        # Installation & FreshClam Instructions Expander Row
+        self.instructions_expander = Adw.ExpanderRow()
+        self.instructions_expander.set_title("How to Install & Configure clamav-freshclam")
+        self.instructions_expander.set_subtitle("Terminal commands and setup instructions for your Linux distribution")
+        self.instructions_expander.set_icon_name("help-about-symbolic")
+
+        distro_spec = ClamAVEngine.get_install_spec()
+
+        # Distribution specific installation row
+        row_distro = Adw.ActionRow()
+        row_distro.set_title(f"1. Install ClamAV and FreshClam on {distro_spec.get('distro', 'your system')}")
+        row_distro.set_subtitle(f"Command: sudo {distro_spec.get('display_command', 'apt install clamav clamav-freshclam')}")
+        copy_distro_btn = Gtk.Button(icon_name="edit-copy-symbolic")
+        copy_distro_btn.set_tooltip_text("Copy install command")
+        copy_distro_btn.set_valign(Gtk.Align.CENTER)
+        copy_distro_btn.add_css_class("flat")
+        copy_distro_btn.connect(
+            "clicked",
+            lambda _b, cmd=f"sudo {distro_spec.get('display_command', 'apt install clamav clamav-freshclam')}":
+                self._copy_to_clipboard(cmd, "Install command copied to clipboard")
+        )
+        row_distro.add_suffix(copy_distro_btn)
+        self.instructions_expander.add_row(row_distro)
+
+        # Debian / Ubuntu package instruction row
+        row_deb = Adw.ActionRow()
+        row_deb.set_title("Debian, Ubuntu & Linux Mint package names")
+        row_deb.set_subtitle("sudo apt-get install -y clamav clamav-daemon clamav-freshclam")
+        copy_deb_btn = Gtk.Button(icon_name="edit-copy-symbolic")
+        copy_deb_btn.set_tooltip_text("Copy Debian command")
+        copy_deb_btn.set_valign(Gtk.Align.CENTER)
+        copy_deb_btn.add_css_class("flat")
+        copy_deb_btn.connect(
+            "clicked",
+            lambda _b: self._copy_to_clipboard(
+                "sudo apt-get install -y clamav clamav-daemon clamav-freshclam",
+                "Debian/Ubuntu command copied"
+            )
+        )
+        row_deb.add_suffix(copy_deb_btn)
+        self.instructions_expander.add_row(row_deb)
+
+        # Fedora & RHEL row
+        row_fedora = Adw.ActionRow()
+        row_fedora.set_title("Fedora, RHEL & Rocky Linux package names")
+        row_fedora.set_subtitle("sudo dnf install -y clamav clamd clamav-update")
+        copy_fedora_btn = Gtk.Button(icon_name="edit-copy-symbolic")
+        copy_fedora_btn.set_tooltip_text("Copy Fedora command")
+        copy_fedora_btn.set_valign(Gtk.Align.CENTER)
+        copy_fedora_btn.add_css_class("flat")
+        copy_fedora_btn.connect(
+            "clicked",
+            lambda _b: self._copy_to_clipboard(
+                "sudo dnf install -y clamav clamd clamav-update",
+                "Fedora command copied"
+            )
+        )
+        row_fedora.add_suffix(copy_fedora_btn)
+        self.instructions_expander.add_row(row_fedora)
+
+        # Arch & openSUSE row
+        row_arch = Adw.ActionRow()
+        row_arch.set_title("Arch Linux & openSUSE package names")
+        row_arch.set_subtitle("Arch: sudo pacman -S clamav • openSUSE: sudo zypper install clamav")
+        copy_arch_btn = Gtk.Button(icon_name="edit-copy-symbolic")
+        copy_arch_btn.set_tooltip_text("Copy Arch command")
+        copy_arch_btn.set_valign(Gtk.Align.CENTER)
+        copy_arch_btn.add_css_class("flat")
+        copy_arch_btn.connect(
+            "clicked",
+            lambda _b: self._copy_to_clipboard(
+                "sudo pacman -Sy --noconfirm clamav",
+                "Arch Linux command copied"
+            )
+        )
+        row_arch.add_suffix(copy_arch_btn)
+        self.instructions_expander.add_row(row_arch)
+
+        # Daemon note row
+        row_daemon = Adw.ActionRow()
+        row_daemon.set_title("2. Automatic Background Signature Updates (systemd service)")
+        row_daemon.set_subtitle(
+            "clamav-freshclam runs as a system daemon. If manual update encounters a log lock, "
+            "Mithrandir automatically pauses the service or updates using local fallback."
+        )
+        self.instructions_expander.add_row(row_daemon)
+
+        self.status_group.add(self.instructions_expander)
 
     def _build_terminal_box(self):
         self.terminal_revealer = Gtk.Revealer()
@@ -450,6 +539,17 @@ class AntivirusPage(Gtk.ScrolledWindow):
             self._on_install_clamav_clicked()
         else:
             self._on_update_definitions_clicked()
+
+    def _copy_to_clipboard(self, text: str, toast_message: str = "Copied to clipboard"):
+        try:
+            display = Gdk.Display.get_default()
+            if display:
+                clipboard = display.get_clipboard()
+                clipboard.set(text)
+                toast = Adw.Toast.new(toast_message)
+                self.toast_overlay.add_toast(toast)
+        except Exception:
+            pass
 
     def _clear_terminal(self):
         if hasattr(self, "terminal_buffer"):

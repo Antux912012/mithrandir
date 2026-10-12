@@ -485,43 +485,75 @@ class ClamAVEngine:
         if callback_progress:
             callback_progress("Contacting ClamAV update mirrors...")
 
-        # If freshclam systemd service is active, freshclam command may fail with lock error.
-        # Check if clamav-freshclam service is running
+        # Check if clamav-freshclam background service is holding the lock on /var/log/clamav/freshclam.log
         code, out, _ = HostBridge.run_command(["systemctl", "is-active", "clamav-freshclam"], timeout=3)
-        if code == 0 and out.strip() == "active":
-            # We can trigger an update by restarting clamav-freshclam or using freshclam directly
+        service_was_active = (code == 0 and out.strip() == "active")
+
+        stopped_service = False
+        if service_was_active:
             if callback_progress:
-                callback_progress("Synchronizing with clamav-freshclam daemon...")
+                callback_progress("Temporarily pausing clamav-freshclam service to release log lock...")
+            stop_code, _ = HostBridge.run_streaming_command(
+                ["systemctl", "stop", "clamav-freshclam"],
+                use_pkexec=True,
+                cancel_event=cancel_event
+            )
+            stopped_service = (stop_code == 0)
 
         output_log = []
 
         def line_cb(line: str):
             output_log.append(line)
             if callback_progress:
-                if "Downloading" in line:
+                if "Downloading" in line or "download" in line.lower():
                     callback_progress(line.strip())
                 elif "Database updated" in line:
                     callback_progress(line.strip())
                 elif "is up to date" in line:
                     callback_progress(line.strip())
 
-        code, out = HostBridge.run_streaming_command(
-            ["freshclam"],
-            line_callback=line_cb,
-            cancel_event=cancel_event,
-            use_pkexec=False,  # If run as user, freshclam can update user DB or use system fallback
-        )
+        try:
+            # First try updating system database with elevated privileges if needed
+            code, out = HostBridge.run_streaming_command(
+                ["freshclam", "--stdout"],
+                line_callback=line_cb,
+                cancel_event=cancel_event,
+                use_pkexec=True,
+            )
 
-        # If permission denied to /var/log/clamav or /var/lib/clamav, retry with pkexec if needed
-        if code != 0 and ("Permission denied" in out or "locked" in out.lower() and "try again" in out.lower()):
-            if "Permission denied" in out:
+            # If failed due to permissions or missing privileges, try running without pkexec (user fallback)
+            if code != 0 and ("not authorized" in out.lower() or "dismissed" in out.lower()):
+                # Create a user-level configuration and database directory
+                user_clamav_dir = os.path.expanduser("~/.local/share/clamav")
+                os.makedirs(user_clamav_dir, exist_ok=True)
+                user_conf_path = os.path.join(user_clamav_dir, "freshclam.conf")
+                user_log_path = os.path.join(user_clamav_dir, "freshclam.log")
+
+                with open(user_conf_path, "w", encoding="utf-8") as f:
+                    f.write(
+                        f"DatabaseDirectory {user_clamav_dir}\n"
+                        f"UpdateLogFile {user_log_path}\n"
+                        "DatabaseMirror database.clamav.net\n"
+                    )
+
                 if callback_progress:
-                    callback_progress("Requesting elevated privileges to update system definitions...")
+                    callback_progress("Updating user-local ClamAV database...")
+
                 code, out = HostBridge.run_streaming_command(
-                    ["freshclam"],
+                    ["freshclam", f"--config-file={user_conf_path}", "--stdout"],
                     line_callback=line_cb,
                     cancel_event=cancel_event,
-                    use_pkexec=True,
+                    use_pkexec=False,
+                )
+
+        finally:
+            # Always restore the clamav-freshclam service if it was running previously
+            if stopped_service:
+                if callback_progress:
+                    callback_progress("Resuming clamav-freshclam service...")
+                HostBridge.run_streaming_command(
+                    ["systemctl", "start", "clamav-freshclam"],
+                    use_pkexec=True
                 )
 
         full_output = "\n".join(output_log) if output_log else out

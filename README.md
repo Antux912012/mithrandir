@@ -161,8 +161,10 @@ When enabled, Mithrandir can minimize to background on window close (`hide_on_cl
 
 ### 🛡️ ClamAV Anti-Malware & Ransomware Detection Suite
 - **One-Click Multi-Distro Installer & Live Terminal Console**: Automatically detects the underlying Linux distribution (Debian/Ubuntu, Fedora/RHEL, Arch Linux, openSUSE) and executes the matching package manager command via Polkit, featuring an embedded live terminal console displaying streamed progress output.
-- **Dynamic Definition Updates**:
+- **In-App Installation & Setup Guide**: Built-in instructions expander detailing package commands (`clamav-freshclam`, `clamav-daemon`, `clamav-update`) across distributions with one-click copy buttons.
+- **Dynamic Definition Updates & Service Lock Handling**:
   - **Manual Updates**: One-click definition update button in the UI with animated progress via FreshClam.
+  - **Service Lock Resolution**: Seamlessly handles background `clamav-freshclam.service` log file locks by temporarily pausing the service during manual sync, or falling back to user-space local databases.
   - **Automatic Pre-Scan Updates**: Configurable policy to verify signature database freshness and auto-update definitions before starting any scan, with graceful offline fallback.
 - **Multi-Profile Scanning**:
   - **Quick Scan**: Rapid inspection of high-risk volatile vectors (`~/Downloads`, `~/.cache`, `/tmp`, startup apps, running process memory links).
