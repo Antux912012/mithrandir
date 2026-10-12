@@ -61,6 +61,20 @@ class ThemeManager:
         border-radius: 12px;
         padding: 16px;
     }
+    .terminal-card {
+        background-color: #0e1218;
+        border: 1px solid rgba(43, 123, 221, 0.4);
+        border-radius: 10px;
+        padding: 12px;
+    }
+    .terminal-view {
+        font-family: monospace, "DejaVu Sans Mono", "Fira Code", monospace;
+        font-size: 11px;
+        background-color: #080a0e;
+        color: #4ade80;
+        border-radius: 6px;
+        padding: 8px;
+    }
     """
 
     LIGHT_CSS = """
@@ -113,6 +127,20 @@ class ThemeManager:
         border: 1px solid rgba(43, 123, 221, 0.3);
         border-radius: 12px;
         padding: 16px;
+    }
+    .terminal-card {
+        background-color: #161b22;
+        border: 1px solid rgba(43, 123, 221, 0.4);
+        border-radius: 10px;
+        padding: 12px;
+    }
+    .terminal-view {
+        font-family: monospace, "DejaVu Sans Mono", "Fira Code", monospace;
+        font-size: 11px;
+        background-color: #0d1117;
+        color: #38ef7d;
+        border-radius: 6px;
+        padding: 8px;
     }
     """
 

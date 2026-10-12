@@ -222,6 +222,162 @@ class ClamAVEngine:
         }
 
     @classmethod
+    def get_install_spec(cls) -> Dict[str, any]:
+        """
+        Determines the appropriate package manager and installation command
+        for ClamAV across Debian / Ubuntu, Fedora / RHEL, Arch Linux, and openSUSE.
+        """
+        has_apt = HostBridge.which("apt-get") is not None or HostBridge.which("apt") is not None
+        has_dnf = HostBridge.which("dnf") is not None
+        has_pacman = HostBridge.which("pacman") is not None
+        has_zypper = HostBridge.which("zypper") is not None
+
+        os_release: Dict[str, str] = {}
+        try:
+            from .distro import DistroDetector
+            os_release = DistroDetector.get_os_release()
+        except Exception:
+            pass
+
+        distro_id = os_release.get("ID", "").lower()
+        id_like = os_release.get("ID_LIKE", "").lower()
+
+        is_fedora_distro = distro_id in ["fedora", "rhel", "centos", "rocky", "almalinux"] or "fedora" in id_like or "rhel" in id_like
+        is_arch_distro = distro_id in ["arch", "manjaro", "endeavouros", "garuda"] or "arch" in id_like
+        is_suse_distro = distro_id in ["opensuse", "opensuse-tumbleweed", "opensuse-leap", "sles"] or "suse" in id_like
+        is_deb_distro = distro_id in ["debian", "ubuntu", "linuxmint", "pop", "elementary", "kali", "zorin"] or "debian" in id_like or "ubuntu" in id_like
+
+        # Check binary presence + distro affinity
+        if (has_dnf and is_fedora_distro) or (has_dnf and not (has_apt or has_pacman or has_zypper)):
+            return {
+                "distro": "Fedora / RHEL",
+                "manager": "dnf",
+                "packages": "clamav clamav-update clamd",
+                "command": ["dnf", "install", "-y", "clamav", "clamav-update", "clamd"],
+                "display_command": "dnf install -y clamav clamav-update clamd",
+                "supported": True
+            }
+
+        if (has_pacman and is_arch_distro) or (has_pacman and not (has_apt or has_dnf or has_zypper)):
+            return {
+                "distro": "Arch Linux",
+                "manager": "pacman",
+                "packages": "clamav",
+                "command": ["pacman", "-Sy", "--noconfirm", "clamav"],
+                "display_command": "pacman -Sy --noconfirm clamav",
+                "supported": True
+            }
+
+        if (has_zypper and is_suse_distro) or (has_zypper and not (has_apt or has_dnf or has_pacman)):
+            return {
+                "distro": "openSUSE",
+                "manager": "zypper",
+                "packages": "clamav",
+                "command": ["zypper", "--non-interactive", "install", "clamav"],
+                "display_command": "zypper --non-interactive install clamav",
+                "supported": True
+            }
+
+        if (has_apt and is_deb_distro) or (has_apt and not (has_dnf or has_pacman or has_zypper)):
+            return {
+                "distro": "Debian / Ubuntu",
+                "manager": "apt-get",
+                "packages": "clamav clamav-freshclam clamav-daemon",
+                "command": ["apt-get", "install", "-y", "clamav", "clamav-freshclam", "clamav-daemon"],
+                "display_command": "apt-get install -y clamav clamav-freshclam clamav-daemon",
+                "supported": True
+            }
+
+        # Fallback to distro release inspection
+        if is_deb_distro:
+            return {
+                "distro": "Debian / Ubuntu",
+                "manager": "apt-get",
+                "packages": "clamav clamav-freshclam clamav-daemon",
+                "command": ["apt-get", "install", "-y", "clamav", "clamav-freshclam", "clamav-daemon"],
+                "display_command": "apt-get install -y clamav clamav-freshclam clamav-daemon",
+                "supported": True
+            }
+
+        if is_fedora_distro:
+            return {
+                "distro": "Fedora / RHEL",
+                "manager": "dnf",
+                "packages": "clamav clamav-update clamd",
+                "command": ["dnf", "install", "-y", "clamav", "clamav-update", "clamd"],
+                "display_command": "dnf install -y clamav clamav-update clamd",
+                "supported": True
+            }
+
+        if is_arch_distro:
+            return {
+                "distro": "Arch Linux",
+                "manager": "pacman",
+                "packages": "clamav",
+                "command": ["pacman", "-Sy", "--noconfirm", "clamav"],
+                "display_command": "pacman -Sy --noconfirm clamav",
+                "supported": True
+            }
+
+        if is_suse_distro:
+            return {
+                "distro": "openSUSE",
+                "manager": "zypper",
+                "packages": "clamav",
+                "command": ["zypper", "--non-interactive", "install", "clamav"],
+                "display_command": "zypper --non-interactive install clamav",
+                "supported": True
+            }
+
+        return {
+            "distro": os_release.get("PRETTY_NAME", "Linux"),
+            "manager": "unknown",
+            "packages": "clamav",
+            "command": [],
+            "display_command": "unknown",
+            "supported": False
+        }
+
+    @classmethod
+    def install_clamav(
+        cls,
+        line_callback: Optional[Callable[[str], None]] = None,
+        cancel_event: Optional[threading.Event] = None
+    ) -> Tuple[bool, str]:
+        """
+        Installs ClamAV using the host's native package manager with Polkit elevation.
+        Streams stdout/stderr progress in real time.
+        """
+        spec = cls.get_install_spec()
+        if not spec.get("supported") or not spec.get("command"):
+            return False, f"Unsupported distribution for automatic installation: {spec.get('distro', 'Unknown')}"
+
+        if line_callback:
+            line_callback(f"[Mithrandir] Detected Linux distribution: {spec['distro']}")
+            line_callback(f"[Mithrandir] Package manager: {spec['manager']}")
+            line_callback(f"[Mithrandir] Executing: pkexec {spec['display_command']}")
+            line_callback("[Mithrandir] Requesting administrator privileges (Polkit authentication)...")
+
+        code, out = HostBridge.run_streaming_command(
+            spec["command"],
+            line_callback=line_callback,
+            cancel_event=cancel_event,
+            use_pkexec=True
+        )
+
+        installed = cls.check_installed()
+        is_ok = (code == 0) or (installed.get("clamscan") or installed.get("freshclam"))
+
+        if is_ok:
+            if line_callback:
+                line_callback("[Mithrandir] ✓ ClamAV engine and dependencies successfully installed!")
+            return True, "ClamAV successfully installed."
+        else:
+            if line_callback:
+                line_callback(f"[Mithrandir] ✗ Installation failed with exit code {code}.")
+            return False, f"Installation failed (exit code {code})"
+
+    @classmethod
     def is_daemon_running(cls) -> bool:
         """Checks if clamav-daemon is active."""
         code, out, _ = HostBridge.run_command(["systemctl", "is-active", "clamav-daemon"], timeout=5)

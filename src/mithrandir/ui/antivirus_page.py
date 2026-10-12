@@ -33,6 +33,7 @@ class AntivirusPage(Gtk.ScrolledWindow):
 
         self.is_scanning = False
         self.is_updating = False
+        self.is_installing = False
         self.cancel_event: threading.Event | None = None
         self.pulse_timer = None
         self.detected_threats: list[ThreatFinding] = []
@@ -43,26 +44,29 @@ class AntivirusPage(Gtk.ScrolledWindow):
         self.box.set_margin_start(24)
         self.box.set_margin_end(24)
 
-        # 1. Outdated Banner
+        # 1. Status / Action Banner
         self.banner = Adw.Banner.new("Virus definitions are outdated. Update to stay protected against new threats.")
         self.banner.set_button_label("Update Now")
-        self.banner.connect("button-clicked", lambda _b: self._on_update_definitions_clicked())
+        self.banner.connect("button-clicked", lambda _b: self._on_banner_clicked())
         self.banner.set_revealed(False)
         self.box.append(self.banner)
 
         # 2. Engine & Definitions Status Group
         self._build_status_group()
 
-        # 3. Scan Profiles Group
+        # 3. Embedded Terminal Progress Box (Revealer)
+        self._build_terminal_box()
+
+        # 4. Scan Profiles Group
         self._build_scan_options_group()
 
-        # 4. Live Scan Progress Box (Revealer)
+        # 5. Live Scan Progress Box (Revealer)
         self._build_progress_box()
 
-        # 5. Detected Threats Group
+        # 6. Detected Threats Group
         self._build_findings_group()
 
-        # 6. Quarantine Vault Group
+        # 7. Quarantine Vault Group
         self._build_quarantine_group()
 
         self.set_child(self.box)
@@ -80,10 +84,21 @@ class AntivirusPage(Gtk.ScrolledWindow):
         self.engine_row = Adw.ActionRow()
         self.engine_row.set_title("ClamAV Scanning Engine")
         self.engine_row.set_subtitle("Checking binaries...")
+
+        engine_suffix_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        engine_suffix_box.set_valign(Gtk.Align.CENTER)
+
         self.engine_badge = Gtk.Label(label="Checking")
         self.engine_badge.add_css_class("dim-label")
         self.engine_badge.set_valign(Gtk.Align.CENTER)
-        self.engine_row.add_suffix(self.engine_badge)
+        engine_suffix_box.append(self.engine_badge)
+
+        self.install_engine_btn = Gtk.Button(label="Install ClamAV")
+        self.install_engine_btn.add_css_class("suggested-action")
+        self.install_engine_btn.connect("clicked", lambda _b: self._on_install_clamav_clicked())
+        engine_suffix_box.append(self.install_engine_btn)
+
+        self.engine_row.add_suffix(engine_suffix_box)
         self.status_group.add(self.engine_row)
 
         # Definitions Row
@@ -120,6 +135,64 @@ class AntivirusPage(Gtk.ScrolledWindow):
         except Exception:
             self.auto_update_switch.set_active(True)
         self.status_group.add(self.auto_update_switch)
+
+    def _build_terminal_box(self):
+        self.terminal_revealer = Gtk.Revealer()
+        self.terminal_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
+        self.terminal_revealer.set_reveal_child(False)
+
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card.add_css_class("terminal-card")
+
+        # Terminal Header
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        header.set_valign(Gtk.Align.CENTER)
+
+        term_icon = Gtk.Image.new_from_icon_name("utilities-terminal-symbolic")
+        term_icon.set_pixel_size(16)
+        header.append(term_icon)
+
+        self.terminal_title = Gtk.Label(label="<b>Terminal Console — Package Installer</b>")
+        self.terminal_title.set_use_markup(True)
+        self.terminal_title.set_halign(Gtk.Align.START)
+        self.terminal_title.set_hexpand(True)
+        header.append(self.terminal_title)
+
+        self.terminal_spinner = Gtk.Spinner()
+        self.terminal_spinner.set_visible(False)
+        header.append(self.terminal_spinner)
+
+        clear_btn = Gtk.Button(label="Clear")
+        clear_btn.add_css_class("flat")
+        clear_btn.connect("clicked", lambda _b: self._clear_terminal())
+        header.append(clear_btn)
+
+        hide_btn = Gtk.Button(label="Hide Console")
+        hide_btn.add_css_class("flat")
+        hide_btn.connect("clicked", lambda _b: self.terminal_revealer.set_reveal_child(False))
+        header.append(hide_btn)
+
+        card.append(header)
+
+        # Monospace Text Scroller
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_min_content_height(180)
+        scroller.set_max_content_height(260)
+        scroller.set_vexpand(True)
+        scroller.set_kinetic_scrolling(True)
+
+        self.terminal_view = Gtk.TextView()
+        self.terminal_view.set_editable(False)
+        self.terminal_view.set_cursor_visible(False)
+        self.terminal_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.terminal_view.add_css_class("terminal-view")
+        self.terminal_buffer = self.terminal_view.get_buffer()
+
+        scroller.set_child(self.terminal_view)
+        card.append(scroller)
+
+        self.terminal_revealer.set_child(card)
+        self.box.append(self.terminal_revealer)
 
     def _build_scan_options_group(self):
         self.scan_group = Adw.PreferencesGroup()
@@ -249,6 +322,7 @@ class AntivirusPage(Gtk.ScrolledWindow):
         """Checks ClamAV availability and definition freshness."""
         def worker():
             installed = ClamAVEngine.check_installed()
+            spec = ClamAVEngine.get_install_spec()
             max_age = 24
             try:
                 max_age = self.settings.get_int("antivirus-definitions-max-age-hours")
@@ -258,24 +332,51 @@ class AntivirusPage(Gtk.ScrolledWindow):
             quarantined = self.vault.list_quarantined()
 
             def update_ui():
-                if installed.get("clamscan") or installed.get("clamdscan"):
+                has_engine = bool(installed.get("clamscan") or installed.get("clamdscan"))
+
+                if has_engine:
                     self.engine_badge.set_text("Installed")
                     self.engine_badge.remove_css_class("dim-label")
+                    self.engine_badge.remove_css_class("error")
                     self.engine_badge.add_css_class("success")
                     self.engine_row.set_subtitle("Engine ready (clamscan)")
+                    self.install_engine_btn.set_label("Reinstall Engine")
+                    self.install_engine_btn.remove_css_class("suggested-action")
+                    self.quick_btn.set_sensitive(True)
+                    self.full_btn.set_sensitive(True)
                 else:
                     self.engine_badge.set_text("Missing")
+                    self.engine_badge.remove_css_class("dim-label")
                     self.engine_badge.remove_css_class("success")
                     self.engine_badge.add_css_class("error")
-                    self.engine_row.set_subtitle("clamscan binary not found (install clamav)")
+                    self.engine_row.set_subtitle(
+                        f"clamscan not found • Click 'Install ClamAV' to install via {spec['distro']} ({spec['manager']})"
+                    )
+                    self.install_engine_btn.set_label("Install ClamAV")
+                    self.install_engine_btn.add_css_class("suggested-action")
+                    self.quick_btn.set_sensitive(False)
+                    self.full_btn.set_sensitive(False)
 
-                if def_info.installed:
+                if not has_engine:
+                    self.banner.set_title(
+                        f"ClamAV engine is not installed. Click to install via {spec['distro']} ({spec['manager']})."
+                    )
+                    self.banner.set_button_label("Install ClamAV")
+                    self.banner.set_revealed(True)
+                elif def_info.installed:
                     self.def_row.set_subtitle(
                         f"{def_info.status_label} • {def_info.total_signatures:,} signatures • Released {def_info.release_date or 'N/A'}"
                     )
-                    self.banner.set_revealed(def_info.is_stale)
+                    if def_info.is_stale:
+                        self.banner.set_title("Virus definitions are outdated. Update to stay protected against new threats.")
+                        self.banner.set_button_label("Update Now")
+                        self.banner.set_revealed(True)
+                    else:
+                        self.banner.set_revealed(False)
                 else:
                     self.def_row.set_subtitle("Definitions missing. Click 'Update Definitions' to download.")
+                    self.banner.set_title("Virus definitions missing. Update to enable protection.")
+                    self.banner.set_button_label("Update Now")
                     self.banner.set_revealed(True)
 
                 self._populate_quarantine_list(quarantined)
@@ -342,6 +443,77 @@ class AntivirusPage(Gtk.ScrolledWindow):
 
             row.add_suffix(btn_box)
             self.quarantine_expander.add_row(row)
+
+    def _on_banner_clicked(self):
+        installed = ClamAVEngine.check_installed()
+        if not installed.get("clamscan") and not installed.get("clamdscan"):
+            self._on_install_clamav_clicked()
+        else:
+            self._on_update_definitions_clicked()
+
+    def _clear_terminal(self):
+        if hasattr(self, "terminal_buffer"):
+            self.terminal_buffer.set_text("")
+
+    def _append_terminal_line(self, line: str):
+        if not hasattr(self, "terminal_buffer"):
+            return
+        end_iter = self.terminal_buffer.get_end_iter()
+        self.terminal_buffer.insert(end_iter, line + "\n")
+        mark = self.terminal_buffer.create_mark(None, self.terminal_buffer.get_end_iter(), False)
+        self.terminal_view.scroll_to_mark(mark, 0.05, True, 0.0, 1.0)
+
+    def _on_install_clamav_clicked(self):
+        """Installs ClamAV using the host package manager with real-time terminal output."""
+        if getattr(self, "is_installing", False):
+            return
+
+        self.is_installing = True
+        self.install_engine_btn.set_sensitive(False)
+        self.terminal_revealer.set_reveal_child(True)
+        self.terminal_spinner.set_visible(True)
+        self.terminal_spinner.start()
+
+        spec = ClamAVEngine.get_install_spec()
+        self.terminal_title.set_markup(
+            f"<b>Terminal Console — Installing ClamAV ({spec['distro']} / {spec['manager']})</b>"
+        )
+        self._clear_terminal()
+        self._append_terminal_line("==================================================")
+        self._append_terminal_line("       Mithrandir ClamAV Engine Installer         ")
+        self._append_terminal_line("==================================================")
+        self._append_terminal_line(f"Target Distribution : {spec['distro']}")
+        self._append_terminal_line(f"Package Manager     : {spec['manager']}")
+        self._append_terminal_line(f"Executing Command   : pkexec {spec['display_command']}")
+        self._append_terminal_line("--------------------------------------------------\n")
+
+        def worker():
+            def line_cb(line: str):
+                GLib.idle_add(lambda: self._append_terminal_line(line))
+
+            ok, msg = ClamAVEngine.install_clamav(line_callback=line_cb)
+
+            def on_done():
+                self.is_installing = False
+                self.terminal_spinner.stop()
+                self.terminal_spinner.set_visible(False)
+                self.install_engine_btn.set_sensitive(True)
+
+                if ok:
+                    self._append_terminal_line("\n--------------------------------------------------")
+                    self._append_terminal_line("[Mithrandir] ✓ SUCCESS: ClamAV is installed and ready for scanning.")
+                    toast = Adw.Toast.new("ClamAV successfully installed!")
+                else:
+                    self._append_terminal_line("\n--------------------------------------------------")
+                    self._append_terminal_line(f"[Mithrandir] ✗ FAILED: {msg}")
+                    toast = Adw.Toast.new(f"Installation failed: {msg}")
+
+                self.toast_overlay.add_toast(toast)
+                self._refresh_status()
+
+            GLib.idle_add(on_done)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _on_update_definitions_clicked(self):
         """Triggers manual signature update via FreshClam."""

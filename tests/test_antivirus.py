@@ -216,6 +216,59 @@ class TestAntivirus(unittest.TestCase):
         for t in targets:
             self.assertTrue(os.path.exists(t))
 
+    def test_install_spec_detection(self):
+        """Verify get_install_spec detects supported package managers."""
+        spec = ClamAVEngine.get_install_spec()
+        self.assertIn("distro", spec)
+        self.assertIn("manager", spec)
+        self.assertIn("command", spec)
+        self.assertTrue(spec["supported"])
+        self.assertTrue(len(spec["command"]) > 0)
+
+    def test_install_spec_distros(self):
+        """Verify correct command is generated for Debian, Fedora, Arch, and openSUSE."""
+        from mithrandir.backend.host_bridge import HostBridge
+
+        # 1. Debian
+        with patch.object(HostBridge, 'which', side_effect=lambda b: '/usr/bin/' + b if b == 'apt-get' else None):
+            deb_spec = ClamAVEngine.get_install_spec()
+            self.assertEqual(deb_spec["manager"], "apt-get")
+            self.assertIn("clamav", deb_spec["packages"])
+
+        # 2. Fedora
+        with patch.object(HostBridge, 'which', side_effect=lambda b: '/usr/bin/' + b if b == 'dnf' else None):
+            fed_spec = ClamAVEngine.get_install_spec()
+            self.assertEqual(fed_spec["manager"], "dnf")
+            self.assertIn("clamav", fed_spec["packages"])
+
+        # 3. Arch Linux
+        with patch.object(HostBridge, 'which', side_effect=lambda b: '/usr/bin/' + b if b == 'pacman' else None):
+            arch_spec = ClamAVEngine.get_install_spec()
+            self.assertEqual(arch_spec["manager"], "pacman")
+            self.assertIn("clamav", arch_spec["packages"])
+
+        # 4. openSUSE
+        with patch.object(HostBridge, 'which', side_effect=lambda b: '/usr/bin/' + b if b == 'zypper' else None):
+            suse_spec = ClamAVEngine.get_install_spec()
+            self.assertEqual(suse_spec["manager"], "zypper")
+            self.assertIn("clamav", suse_spec["packages"])
+
+    def test_install_clamav_streaming(self):
+        """Verify install_clamav invokes streaming command and lines callback."""
+        from mithrandir.backend.host_bridge import HostBridge
+
+        captured_lines = []
+        def cb(line):
+            captured_lines.append(line)
+
+        with patch.object(HostBridge, 'run_streaming_command', return_value=(0, "All done")):
+            with patch.object(ClamAVEngine, 'check_installed', return_value={"clamscan": True}):
+                ok, msg = ClamAVEngine.install_clamav(line_callback=cb)
+                self.assertTrue(ok)
+                self.assertTrue(len(captured_lines) > 0)
+                self.assertIn("Mithrandir", captured_lines[0])
+
 
 if __name__ == "__main__":
     unittest.main()
+
