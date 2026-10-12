@@ -274,3 +274,18 @@ gsettings set io.github.antonio.Mithrandir ai-model "llama3.2"
 - **License**: GNU General Public License v3.0 or later ([GPL-3.0-or-later](LICENSE))
 
 Contributions, feature suggestions, and bug reports are welcome. Please open an issue or pull request on GitHub.
+
+---
+
+## 9. Acknowledgments & Inspirations
+
+Mithrandir stands on the shoulders of remarkable open-source projects and developer utilities. Sincere gratitude and appreciation are extended to:
+
+- **[Stacer](https://github.com/oguzhaninan/Stacer)** — For pioneering modern, intuitive all-in-one Linux system monitoring, task management, and service control.
+- **[Microsoft PC Manager](https://pcmanager.microsoft.com/)** — For inspiring the proactive, low-overhead "Smart Boost" mechanism, automating standby RAM purging and temporary clutter threshold monitoring.
+- **[BleachBit](https://www.bleachbit.org/)** — For establishing the gold standard in deep system cleaning algorithms, granular path scanning, dry-run previews, and safe cache vacuuming.
+- **[Snapper](https://github.com/openSUSE/snapper)** & **[Timeshift](https://github.com/linuxmint/timeshift)** — For their foundational work on BTRFS copy-on-write (COW) snapshot creation, layout conventions, and filesystem restore points.
+- **[Stremio](https://www.stremio.com/)** — For the streaming media platform that inspired Mithrandir's specialized torrent chunk and video part cache cleaner.
+- **[GNOME](https://www.gnome.org/) & [Libadwaita](https://gitlab.gnome.org/GNOME/libadwaita)** — For the design philosophy, adaptive widgets, and modern UI foundation that make Linux applications a pleasure to use.
+- **[Ollama](https://ollama.com/) & [LM Studio](https://lmstudio.ai/)** — For empowering local, privacy-first AI model inference and enabling offline intelligent system log triage.
+
