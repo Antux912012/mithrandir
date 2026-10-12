@@ -1,0 +1,18 @@
+#!@PYTHON@
+
+import os
+import sys
+import signal
+import locale
+import gettext
+
+pkgdatadir = '@PKGDATADIR@'
+localedir = '@localedir@'
+
+sys.path.insert(1, pkgdatadir)
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+gettext.install('io.github.antonio.Mithrandir', localedir)
+
+if __name__ == '__main__':
+    from mithrandir.main import main
+    sys.exit(main(version='@VERSION@'))

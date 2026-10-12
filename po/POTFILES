@@ -1,0 +1,4 @@
+data/io.github.antonio.Mithrandir.desktop.in
+data/io.github.antonio.Mithrandir.metainfo.xml.in
+src/mithrandir/main.py
+src/mithrandir/window.py

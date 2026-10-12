@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.antonio.Mithrandir</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Mithrandir</name>
+  <summary>System cleaner, maintenance and AI diagnostics</summary>
+  <description>
+    <p>
+      Mithrandir is a modern Linux system maintenance suite and cleaner inspired by BleachBit and Stacer, augmented with AI-powered system diagnosis and interactive fix tools.
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>Fast and safe system cleaning (caches, thumbnails, logs, packages)</li>
+      <li>Real-time resource and hardware monitoring</li>
+      <li>Systemd service inspection and autostart app control</li>
+      <li>Process manager with live status updates</li>
+      <li>AI Diagnostics powered by OpenAI-compatible APIs or local LLMs (LM Studio)</li>
+    </ul>
+  </description>
+  <url type="homepage">https://github.com/Antux912012/mithrandir</url>
+  <url type="bugtracker">https://github.com/Antux912012/mithrandir/issues</url>
+  <developer id="io.github.antonio">
+    <name>Antonio</name>
+  </developer>
+  <launchable type="desktop-id">io.github.antonio.Mithrandir.desktop</launchable>
+  <branding>
+    <color type="primary" scheme_preference="light">#3584e4</color>
+    <color type="primary" scheme_preference="dark">#1c71d8</color>
+  </branding>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-10-11">
+      <description>
+        <p>Initial release of Mithrandir with cleaner, monitoring, and AI diagnostic capabilities.</p>
+      </description>
+    </release>
+  </releases>
+</component>

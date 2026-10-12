@@ -1,0 +1,14 @@
+Package: mithrandir
+Version: 0.1.0
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: Antonio <antonio@localhost>
+Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, dconf-gsettings-backend | gsettings-backend
+Recommends: papirus-icon-theme
+Homepage: https://github.com/Antux912012/mithrandir
+Description: Modern GNU/Linux System Cleaner, Maintenance, and AI Diagnostics
+ Mithrandir is an intuitive, Libadwaita-based GNU/Linux maintenance utility.
+ It provides deep system cleaning (caches, logs, unneeded packages, Flatpaks, Snaps),
+ realtime hardware and temperature sensor monitoring, systemd service management,
+ and AI-assisted troubleshooting with local and cloud models.

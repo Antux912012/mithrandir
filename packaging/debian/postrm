@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    if [ -x /usr/bin/glib-compile-schemas ]; then
+        /usr/bin/glib-compile-schemas /usr/share/glib-2.0/schemas || true
+    fi
+    if [ -x /usr/bin/gtk4-update-icon-cache ]; then
+        /usr/bin/gtk4-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+    fi
+    if [ -x /usr/bin/update-desktop-database ]; then
+        /usr/bin/update-desktop-database -q /usr/share/applications || true
+    fi
+fi
+
+exit 0

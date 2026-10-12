@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3584e4"/>
+      <stop offset="100%" stop-color="#1c71d8"/>
+    </linearGradient>
+    <linearGradient id="wand" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f6d32d"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="96" height="96" rx="24" fill="url(#bg)"/>
+  <!-- Shield outline -->
+  <path d="M64 30 L90 40 V66 C90 82 78 95 64 100 C50 95 38 82 38 66 V40 Z" fill="none" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" opacity="0.3"/>
+  <!-- Sparkles / Magic Broom & AI Star -->
+  <path d="M64 42 L67 52 L77 55 L67 58 L64 68 L61 58 L51 55 L61 52 Z" fill="url(#wand)"/>
+  <circle cx="82" cy="46" r="3" fill="#f6d32d"/>
+  <circle cx="46" cy="74" r="3" fill="#f6d32d"/>
+  <circle cx="78" cy="80" r="4" fill="#62a0ea"/>
+  <!-- Sweeper sweep lines -->
+  <path d="M48 88 Q64 94 80 88" stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none"/>
+</svg>

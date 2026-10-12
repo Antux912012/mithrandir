@@ -1,0 +1,27 @@
+# Meson & Ninja build artifacts
+_build*/
+build*/
+subprojects/
+
+# Debian packaging artifacts
+pkg-deb/
+*.deb
+
+# Flatpak artifacts
+.flatpak-builder/
+
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor & OS artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
