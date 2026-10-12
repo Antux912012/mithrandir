@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Antux912012/mithrandir/releases"><img src="https://img.shields.io/badge/version-0.2.0--experimental-blue.svg" alt="Version" /></a>
+  <a href="https://github.com/Antux912012/mithrandir/releases"><img src="https://img.shields.io/badge/version-0.3.0--stable-blue.svg" alt="Version" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later" /></a>
   <a href="https://gtk.org/"><img src="https://img.shields.io/badge/GUI-GTK%204%20%7C%20Libadwaita-brightgreen.svg" alt="GTK4 & Libadwaita" /></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-informational.svg" alt="Python 3.10+" /></a>
@@ -173,6 +173,62 @@ When enabled, Mithrandir can minimize to background on window close (`hide_on_cl
 - **Background Throttling & Cancelability**: Background execution throttled via `nice -n 19` and `ionice -c 3` to keep desktop UI at 60 FPS without freezing, with real-time scan cancellation support.
 - **Isolated Quarantine Vault**: Quarantined threats are neutralized with revoked execution permissions (`chmod 0000`), renamed, and cataloged with SHA256 metadata manifests for one-click restoration or permanent deletion.
 
+#### How to Enable Anti-Malware on Major Linux Distributions
+
+While Mithrandir features an automatic **"Install ClamAV"** button with a real-time console in the application, you can also enable and configure the engine manually on your distribution:
+
+##### 1. Debian / Ubuntu / Linux Mint / Pop!_OS
+```bash
+# 1. Install ClamAV engine, daemon, and signature updater
+sudo apt update
+sudo apt install -y clamav clamav-daemon clamav-freshclam
+
+# 2. Update signature definitions manually (or via Mithrandir)
+# Note: stop the service first if running freshclam in terminal to avoid log file lock
+sudo systemctl stop clamav-freshclam
+sudo freshclam
+sudo systemctl start clamav-freshclam
+sudo systemctl enable --now clamav-daemon
+```
+
+##### 2. Fedora / RHEL / CentOS / Rocky Linux / AlmaLinux
+```bash
+# 1. Install ClamAV, clamd daemon, and update utility
+sudo dnf install -y clamav clamd clamav-update
+
+# 2. Update signature database
+sudo freshclam
+
+# 3. Enable clamd scanning service
+sudo systemctl enable --now clamd@scan
+```
+
+##### 3. Arch Linux / Manjaro / EndeavourOS
+```bash
+# 1. Install ClamAV package
+sudo pacman -Sy --noconfirm clamav
+
+# 2. Setup freshclam configuration if first time
+sudo cp /etc/clamav/freshclam.conf.sample /etc/clamav/freshclam.conf 2>/dev/null || true
+sudo sed -i -e "s/^Example/#Example/" /etc/clamav/freshclam.conf 2>/dev/null || true
+
+# 3. Download virus definitions and enable auto-update service
+sudo freshclam
+sudo systemctl enable --now clamav-freshclam
+```
+
+##### 4. openSUSE (Tumbleweed & Leap)
+```bash
+# 1. Install ClamAV package
+sudo zypper --non-interactive install clamav
+
+# 2. Download virus signatures
+sudo freshclam
+
+# 3. Enable freshclam updater daemon
+sudo systemctl enable --now freshclam
+```
+
 ---
 
 ## 4. Installation & Build Instructions
@@ -181,7 +237,7 @@ When enabled, Mithrandir can minimize to background on window close (`hide_on_cl
 
 Install the pre-compiled `.deb` package:
 ```bash
-sudo apt install ./mithrandir_0.2.0_all.deb
+sudo apt install ./mithrandir_0.3.0_all.deb
 ```
 
 Or build the package directly from source:
@@ -202,7 +258,7 @@ chmod 755 pkg-deb/DEBIAN/postinst pkg-deb/DEBIAN/postrm
 
 # Clean bytecode artifacts and assemble package
 find pkg-deb -type d -name "__pycache__" -exec rm -rf {} +
-dpkg-deb --build --root-owner-group pkg-deb mithrandir_0.1.0_all.deb
+dpkg-deb --build --root-owner-group pkg-deb mithrandir_0.3.0_all.deb
 ```
 
 ### 4.2 Flatpak (Sandboxed)
