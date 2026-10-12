@@ -53,5 +53,33 @@
       <default>true</default>
       <summary>Whether to notify when Smart Boost triggers</summary>
     </key>
+    <key name="antivirus-auto-update-before-scan" type="b">
+      <default>true</default>
+      <summary>Automatically update virus definitions before any scan</summary>
+    </key>
+    <key name="antivirus-definitions-max-age-hours" type="i">
+      <default>24</default>
+      <summary>Maximum age of virus definitions in hours before considered stale</summary>
+    </key>
+    <key name="antivirus-last-update-timestamp" type="x">
+      <default>0</default>
+      <summary>UNIX timestamp of the last successful definitions update</summary>
+    </key>
+    <key name="antivirus-default-scan-profile" type="s">
+      <default>'quick'</default>
+      <summary>Default scan profile: 'quick', 'full', or 'custom'</summary>
+    </key>
+    <key name="antivirus-quarantine-path" type="s">
+      <default>''</default>
+      <summary>Custom quarantine path, empty defaults to ~/.local/share/io.github.antonio.Mithrandir/quarantine</summary>
+    </key>
+    <key name="antivirus-heuristic-alerts" type="b">
+      <default>true</default>
+      <summary>Enable ClamAV heuristic ransomware and macro inspection</summary>
+    </key>
+    <key name="antivirus-process-priority-nice" type="i">
+      <default>19</default>
+      <summary>Process nice priority for clamscan (0 to 19)</summary>
+    </key>
   </schema>
 </schemalist>

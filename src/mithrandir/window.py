@@ -11,6 +11,7 @@ from .ui.uninstaller_page import UninstallerPage
 from .ui.btrfs_page import BtrfsPage
 from .ui.grub_page import GrubPage
 from .ui.ai_page import AIPage
+from .ui.antivirus_page import AntivirusPage
 from .ui.preferences_dialog import PreferencesDialog
 from .ui.theme import ThemeManager
 
@@ -99,6 +100,7 @@ class MithrandirWindow(Adw.ApplicationWindow):
         self.btrfs_page = BtrfsPage(self.toast_overlay)
         self.grub_page = GrubPage(self.toast_overlay)
         self.ai_page = AIPage(self.toast_overlay, self.settings)
+        self.antivirus_page = AntivirusPage(self.toast_overlay, self.settings)
 
         self.stack.add_titled(self.dashboard_page, "dashboard", "Dashboard")
         self.stack.add_titled(self.cleaner_page, "cleaner", "Cleaner")
@@ -109,6 +111,7 @@ class MithrandirWindow(Adw.ApplicationWindow):
         self.stack.add_titled(self.btrfs_page, "btrfs", "BTRFS Snapshots")
         self.stack.add_titled(self.grub_page, "grub", "GRUB Bootloader")
         self.stack.add_titled(self.ai_page, "ai", "AI Diagnostics")
+        self.stack.add_titled(self.antivirus_page, "antivirus", "Anti-Malware")
 
         # Sidebar setup
         self.sidebar_expanded = True
@@ -231,7 +234,8 @@ class MithrandirWindow(Adw.ApplicationWindow):
             ("uninstaller", "Uninstaller", "system-software-install-symbolic"),
             ("btrfs", "BTRFS Snapshots", "drive-harddisk-symbolic"),
             ("grub", "GRUB Bootloader", "computer-symbolic"),
-            ("ai", "AI Diagnostics", "system-search-symbolic")
+            ("ai", "AI Diagnostics", "system-search-symbolic"),
+            ("antivirus", "Anti-Malware", "security-high-symbolic")
         ]
 
         self.sidebar_items = {}
@@ -290,7 +294,7 @@ class MithrandirWindow(Adw.ApplicationWindow):
         about.set_application_name("Mithrandir")
         about.set_application_icon("io.github.antonio.Mithrandir")
         about.set_developer_name("Antonio")
-        about.set_version("0.1.0")
+        about.set_version("0.2.0")
         about.set_comments("Modern GNU/Linux Cleaner, Maintenance, Optimizer, and AI Diagnostics")
         about.set_website("https://github.com/Antux912012/mithrandir")
         about.set_issue_url("https://github.com/Antux912012/mithrandir/issues")

@@ -5,8 +5,8 @@ subprojects/
 
 # Debian packaging artifacts
 pkg-deb/
-!mithrandir_0.1.0_all.deb
-!mithrandir_0.1.0.flatpak
+!*.deb
+!*.flatpak
 
 # Flatpak artifacts
 .flatpak-builder/
