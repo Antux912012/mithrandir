@@ -16,11 +16,11 @@ class GrubManager:
 
     @classmethod
     def is_available(cls) -> bool:
-        return os.path.exists(cls.GRUB_CONFIG_PATH)
+        return HostBridge.file_exists(cls.GRUB_CONFIG_PATH)
 
     @classmethod
     def has_backup(cls) -> bool:
-        return os.path.exists(cls.GRUB_BACKUP_PATH)
+        return HostBridge.file_exists(cls.GRUB_BACKUP_PATH)
 
     @classmethod
     def ensure_backup(cls) -> bool:
@@ -140,17 +140,23 @@ class GrubManager:
 
         new_text = "\n".join(updated_lines) + "\n"
 
-        # Write to temporary file then copy via pkexec
-        with tempfile.NamedTemporaryFile('w', delete=False, encoding='utf-8') as tf:
-            tf.write(new_text)
-            temp_path = tf.name
+        # Use ~/.cache/mithrandir_grub.tmp so the file is accessible to both the Flatpak sandbox and the host
+        cache_dir = os.path.expanduser('~/.cache')
+        os.makedirs(cache_dir, exist_ok=True)
+        temp_path = os.path.join(cache_dir, f'mithrandir_grub_{os.getpid()}.tmp')
 
-        copy_cmd = ['cp', temp_path, cls.GRUB_CONFIG_PATH]
-        code, out, err = HostBridge.run_command(copy_cmd, use_pkexec=True)
         try:
-            os.remove(temp_path)
-        except OSError:
-            pass
+            with open(temp_path, 'w', encoding='utf-8') as tf:
+                tf.write(new_text)
+
+            copy_cmd = ['cp', temp_path, cls.GRUB_CONFIG_PATH]
+            code, out, err = HostBridge.run_command(copy_cmd, use_pkexec=True)
+        finally:
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except OSError:
+                pass
 
         if code != 0:
             return False, f"Failed to update /etc/default/grub: {err or out}"
@@ -175,10 +181,9 @@ class GrubManager:
     @classmethod
     def _run_grub_update(cls) -> tuple[bool, str]:
         """
-        Executes update-grub or grub-mkconfig.
+        Executes update-grub or grub-mkconfig on the host.
         """
-        which_ug = HostBridge.run_command(['which', 'update-grub'])[0]
-        if which_ug == 0:
+        if HostBridge.which('update-grub'):
             code, out, err = HostBridge.run_command(['update-grub'], use_pkexec=True)
             if code == 0:
                 return True, "GRUB configuration saved and updated successfully."
@@ -186,9 +191,9 @@ class GrubManager:
 
         # Fallback to grub-mkconfig / grub2-mkconfig
         for grub_tool in ['grub-mkconfig', 'grub2-mkconfig']:
-            if HostBridge.run_command(['which', grub_tool])[0] == 0:
+            if HostBridge.which(grub_tool):
                 for cfg_target in ['/boot/grub/grub.cfg', '/boot/grub2/grub.cfg']:
-                    if os.path.exists(os.path.dirname(cfg_target)):
+                    if HostBridge.dir_exists(os.path.dirname(cfg_target)):
                         code, out, err = HostBridge.run_command([grub_tool, '-o', cfg_target], use_pkexec=True)
                         if code == 0:
                             return True, f"GRUB updated with {grub_tool} on {cfg_target}."

@@ -80,32 +80,46 @@ class QuarantineVault:
     def quarantine_file(self, threat: ThreatFinding) -> Tuple[bool, str]:
         """
         Quarantines a file: calculates SHA256, moves it to vault, strips permissions,
-        and saves metadata.
+        and saves metadata. Works seamlessly inside Flatpak and on host.
         """
         self._ensure_vault()
         source_path = threat.file_path
 
-        if not os.path.exists(source_path):
+        exists_locally = os.path.exists(source_path)
+        exists_on_host = HostBridge.file_exists(source_path)
+        if not exists_locally and not exists_on_host:
             return False, f"File no longer exists: {source_path}"
 
         try:
-            sha256_hash = hashlib.sha256()
-            try:
-                with open(source_path, "rb") as f:
-                    for chunk in iter(lambda: f.read(65536), b""):
-                        sha256_hash.update(chunk)
-                file_hash = sha256_hash.hexdigest()
-            except Exception:
-                file_hash = "unknown"
+            file_hash = "unknown"
+            if exists_locally:
+                try:
+                    sha256_hash = hashlib.sha256()
+                    with open(source_path, "rb") as f:
+                        for chunk in iter(lambda: f.read(65536), b""):
+                            sha256_hash.update(chunk)
+                    file_hash = sha256_hash.hexdigest()
+                except Exception:
+                    file_hash = "unknown"
+            else:
+                code, out, _ = HostBridge.run_command(['sha256sum', source_path], timeout=5)
+                if code == 0 and out.strip():
+                    file_hash = out.strip().split()[0]
 
             dest_filename = f"{threat.threat_id}.quarantined"
             dest_meta = f"{threat.threat_id}.json"
             dest_path = os.path.join(self.vault_dir, dest_filename)
             meta_path = os.path.join(self.vault_dir, dest_meta)
 
-            shutil.move(source_path, dest_path)
-            # Remove all read, write, and execute permissions
-            os.chmod(dest_path, 0o000)
+            if exists_locally:
+                shutil.move(source_path, dest_path)
+                os.chmod(dest_path, 0o000)
+            else:
+                # File is on host outside Flatpak sandbox
+                code, _, err = HostBridge.run_command(['mv', source_path, dest_path], use_pkexec=True)
+                if code != 0:
+                    return False, f"Failed to quarantine file on host: {err}"
+                HostBridge.run_command(['chmod', '000', dest_path])
 
             metadata = {
                 "threat_id": threat.threat_id,
@@ -144,12 +158,18 @@ class QuarantineVault:
                 return False, "Original path missing from metadata."
 
             orig_dir = os.path.dirname(orig_path)
-            if not os.path.exists(orig_dir):
-                os.makedirs(orig_dir, exist_ok=True)
-
             # Restore read/write permissions so file can be moved
             os.chmod(vault_file, 0o644)
-            shutil.move(vault_file, orig_path)
+
+            if os.path.exists(orig_dir):
+                shutil.move(vault_file, orig_path)
+            else:
+                if not HostBridge.dir_exists(orig_dir):
+                    HostBridge.run_command(['mkdir', '-p', orig_dir], use_pkexec=True)
+                code, _, err = HostBridge.run_command(['mv', vault_file, orig_path], use_pkexec=True)
+                if code != 0:
+                    os.chmod(vault_file, 0o000)
+                    return False, f"Restore failed: {err}"
 
             os.remove(meta_path)
             return True, f"File restored to {orig_path}"
@@ -390,11 +410,20 @@ class ClamAVEngine:
         First 512 bytes contains: ClamAV-VDB:build_time:version:sigs:type:md5:dsig:...
         """
         try:
-            if not os.path.exists(file_path):
-                return None
-            with open(file_path, "rb") as f:
-                header = f.read(512).decode("latin-1", errors="ignore")
-            if header.startswith("ClamAV-VDB:"):
+            header = None
+            if os.path.exists(file_path):
+                try:
+                    with open(file_path, "rb") as f:
+                        header = f.read(512).decode("latin-1", errors="ignore")
+                except Exception:
+                    pass
+
+            if not header and HostBridge.file_exists(file_path):
+                code, out, _ = HostBridge.run_command(['head', '-c', '512', file_path], timeout=4)
+                if code == 0 and out:
+                    header = out
+
+            if header and header.startswith("ClamAV-VDB:"):
                 parts = header.split(":")
                 if len(parts) >= 4:
                     build_time_str = parts[1]
@@ -413,12 +442,13 @@ class ClamAVEngine:
     def get_definitions_info(cls, max_age_hours: int = 24) -> DefinitionsStatus:
         """
         Inspects ClamAV database files to determine freshness, signature count, and age.
+        Works across native installs and Flatpak environments.
         """
         candidate_files = []
         for d in cls.CVD_DIRS:
             for fname in ["daily.cld", "daily.cvd", "main.cld", "main.cvd"]:
                 p = os.path.join(d, fname)
-                if os.path.exists(p):
+                if os.path.exists(p) or HostBridge.file_exists(p):
                     candidate_files.append(p)
 
         if not candidate_files:
@@ -433,9 +463,11 @@ class ClamAVEngine:
             )
 
         # Use the most recently modified database file
-        candidate_files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        candidate_files.sort(key=lambda p: HostBridge.get_file_mtime(p), reverse=True)
         latest_file = candidate_files[0]
-        mtime = os.path.getmtime(latest_file)
+        mtime = HostBridge.get_file_mtime(latest_file)
+        if mtime <= 0:
+            mtime = time.time()
         age_seconds = max(0, time.time() - mtime)
         age_hours = age_seconds / 3600.0
 

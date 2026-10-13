@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Antux912012/mithrandir/releases"><img src="https://img.shields.io/badge/version-0.3.0--stable-blue.svg" alt="Version" /></a>
+  <a href="https://github.com/Antux912012/mithrandir/releases"><img src="https://img.shields.io/badge/version-0.3.5--stable-blue.svg" alt="Version" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later" /></a>
   <a href="https://gtk.org/"><img src="https://img.shields.io/badge/GUI-GTK%204%20%7C%20Libadwaita-brightgreen.svg" alt="GTK4 & Libadwaita" /></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-informational.svg" alt="Python 3.10+" /></a>
@@ -101,6 +101,7 @@ When enabled, Mithrandir can minimize to background on window close (`hide_on_cl
   - Physical Memory (Used, Available, Standby/Cached)
   - Root Filesystem Mount Capacity & Inode Ratios
   - Hardware Thermal Zones (`/sys/class/thermal` & `coretemp`)
+  - Battery Real vs. Design Capacity in Wh & Health Percentage Telemetry (`/sys/class/power_supply` & `upower`)
   - Real-time Network Throughput (Download Rx / Upload Tx in KB/s and MB/s)
   - Dual GPU Detection & Metric Scraping (NVIDIA NVML & AMD/Intel DRM sysfs nodes)
 
@@ -237,7 +238,7 @@ sudo systemctl enable --now freshclam
 
 Install the pre-compiled `.deb` package:
 ```bash
-sudo apt install ./mithrandir_0.3.0_all.deb
+sudo apt install ./mithrandir_0.3.5_all.deb
 ```
 
 Or build the package directly from source:
@@ -258,7 +259,7 @@ chmod 755 pkg-deb/DEBIAN/postinst pkg-deb/DEBIAN/postrm
 
 # Clean bytecode artifacts and assemble package
 find pkg-deb -type d -name "__pycache__" -exec rm -rf {} +
-dpkg-deb --build --root-owner-group pkg-deb mithrandir_0.3.0_all.deb
+dpkg-deb --build --root-owner-group pkg-deb mithrandir_0.3.5_all.deb
 ```
 
 ### 4.2 Flatpak (Sandboxed)

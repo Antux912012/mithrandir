@@ -28,6 +28,36 @@ class ThemeManager:
         background: rgba(255, 255, 255, 0.15);
         color: #ffffff;
     }
+    /* Window Controls (Minimize, Maximize, Close): Keep highlight strictly inside circular icon */
+    headerbar windowcontrols button,
+    headerbar windowcontrols button:hover,
+    headerbar windowcontrols button:active {
+        background: transparent;
+        background-color: transparent;
+        background-image: none;
+        box-shadow: none;
+        border: none;
+    }
+    headerbar windowcontrols button:focus,
+    headerbar windowcontrols button:focus:focus-visible {
+        outline: none;
+        box-shadow: none;
+    }
+    headerbar windowcontrols button > image {
+        border-radius: 9999px;
+        padding: 4px;
+        transition: background-color 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+    headerbar windowcontrols button:hover > image {
+        background-color: rgba(255, 255, 255, 0.18);
+    }
+    headerbar windowcontrols button:active > image {
+        background-color: rgba(255, 255, 255, 0.32);
+    }
+    headerbar windowcontrols button:focus:focus-visible > image {
+        outline: 2px solid rgba(255, 255, 255, 0.5);
+        outline-offset: 1px;
+    }
     .sidebar {
         background: linear-gradient(180deg, #102a49 0%, #0c2037 100%);
         border-right: 1px solid rgba(43, 123, 221, 0.25);
@@ -94,6 +124,36 @@ class ThemeManager:
     headerbar button:hover {
         background: rgba(255, 255, 255, 0.22);
         color: #ffffff;
+    }
+    /* Window Controls (Minimize, Maximize, Close): Keep highlight strictly inside circular icon */
+    headerbar windowcontrols button,
+    headerbar windowcontrols button:hover,
+    headerbar windowcontrols button:active {
+        background: transparent;
+        background-color: transparent;
+        background-image: none;
+        box-shadow: none;
+        border: none;
+    }
+    headerbar windowcontrols button:focus,
+    headerbar windowcontrols button:focus:focus-visible {
+        outline: none;
+        box-shadow: none;
+    }
+    headerbar windowcontrols button > image {
+        border-radius: 9999px;
+        padding: 4px;
+        transition: background-color 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+    headerbar windowcontrols button:hover > image {
+        background-color: rgba(255, 255, 255, 0.22);
+    }
+    headerbar windowcontrols button:active > image {
+        background-color: rgba(255, 255, 255, 0.35);
+    }
+    headerbar windowcontrols button:focus:focus-visible > image {
+        outline: 2px solid rgba(255, 255, 255, 0.5);
+        outline-offset: 1px;
     }
     .sidebar {
         background: linear-gradient(180deg, #edf4fc 0%, #e2eefb 100%);

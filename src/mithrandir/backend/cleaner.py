@@ -140,27 +140,39 @@ class CleanerEngine:
         elif item_id == 'flatpak_cache':
             total_size = 0
             total_count = 0
-            if HostBridge.is_flatpak():
-                cmd = ['sh', '-c', 'du -sb ~/.var/app/*/cache 2>/dev/null | grep -v "Mithrandir" | grep -v "Mitrandil" | awk \'{s+=$1; c+=1} END {print s, c}\'']
-                code, out, _ = HostBridge.run_command(cmd, timeout=5)
-                if code == 0 and out.strip():
-                    parts = out.strip().split()
-                    try:
-                        total_size = int(parts[0]) if len(parts) > 0 and parts[0] != '' else 0
-                        total_count = int(parts[1]) if len(parts) > 1 and parts[1] != '' else 0
-                    except (ValueError, IndexError):
-                        pass
+            var_app = os.path.expanduser('~/.var/app')
+            apps_found = []
+            if os.path.exists(var_app):
+                try:
+                    apps_found = [
+                        a for a in os.listdir(var_app)
+                        if a not in ['io.github.antonio.Mitrandil', 'io.github.antonio.Mithrandir']
+                    ]
+                except OSError:
+                    apps_found = []
+
+            if apps_found:
+                for app in apps_found:
+                    c_dir = os.path.join(var_app, app, 'cache')
+                    if os.path.exists(c_dir):
+                        s, c = cls._calc_dir_size(c_dir)
+                        total_size += s
+                        total_count += c
             else:
-                var_app = os.path.expanduser('~/.var/app')
-                if os.path.exists(var_app):
-                    for app in os.listdir(var_app):
-                        if app in ['io.github.antonio.Mitrandil', 'io.github.antonio.Mithrandir']:
-                            continue
-                        c_dir = os.path.join(var_app, app, 'cache')
-                        if os.path.exists(c_dir):
-                            s, c = cls._calc_dir_size(c_dir)
-                            total_size += s
-                            total_count += c
+                # Fallback to host command if ~/.var/app is isolated in sandbox
+                code, out, _ = HostBridge.run_command(
+                    ['sh', '-c', 'du -sk ~/.var/app/*/cache 2>/dev/null'],
+                    timeout=6
+                )
+                if code == 0 and out.strip():
+                    for line in out.strip().splitlines():
+                        parts = line.split()
+                        if len(parts) >= 2 and not any(m in parts[1] for m in ['Mithrandir', 'Mitrandil']):
+                            try:
+                                total_size += int(parts[0]) * 1024
+                                total_count += 1
+                            except ValueError:
+                                pass
             return CleanerItem(
                 id='flatpak_cache',
                 name='Flatpak Applications Cache',
@@ -343,22 +355,23 @@ class CleanerEngine:
                     HostBridge.run_command(['sh', '-c', f'find "{cache_dir}" -mindepth 1 -maxdepth 1 ! -name thumbnails -exec rm -rf {{}} + 2>/dev/null || true'])
                 return True, f"Cleaned {count} cache folders."
         elif item_id == 'flatpak_cache':
-            if HostBridge.is_flatpak():
-                clean_cmd = [
-                    'sh', '-c',
-                    'for d in ~/.var/app/*/cache; do case "$d" in *io.github.antonio.Mithrandir*|*io.github.antonio.Mitrandil*) ;; *) rm -rf "$d"/* ;; esac; done'
-                ]
-                code, out, err = HostBridge.run_command(clean_cmd, timeout=15)
-                return (code == 0), "Flatpak applications cache cleaned." if code == 0 else err
-            else:
-                var_app = os.path.expanduser('~/.var/app')
+            var_app = os.path.expanduser('~/.var/app')
+            apps_found = []
+            if os.path.exists(var_app):
+                try:
+                    apps_found = [
+                        a for a in os.listdir(var_app)
+                        if a not in ['io.github.antonio.Mitrandil', 'io.github.antonio.Mithrandir']
+                    ]
+                except OSError:
+                    apps_found = []
+
+            if apps_found:
                 cleaned_apps = 0
-                if os.path.exists(var_app):
-                    for app in os.listdir(var_app):
-                        if app in ['io.github.antonio.Mitrandil', 'io.github.antonio.Mithrandir']:
-                            continue
-                        c_dir = os.path.join(var_app, app, 'cache')
-                        if os.path.exists(c_dir) and cls._is_path_safe(c_dir):
+                for app in apps_found:
+                    c_dir = os.path.join(var_app, app, 'cache')
+                    if os.path.exists(c_dir) and cls._is_path_safe(c_dir):
+                        try:
                             for entry in os.listdir(c_dir):
                                 ep = os.path.join(c_dir, entry)
                                 try:
@@ -369,7 +382,16 @@ class CleanerEngine:
                                 except OSError:
                                     pass
                             cleaned_apps += 1
+                        except OSError:
+                            pass
                 return True, f"Cleaned cache for {cleaned_apps} Flatpak applications."
+            else:
+                clean_cmd = [
+                    'sh', '-c',
+                    'for d in ~/.var/app/*/cache; do case "$d" in *io.github.antonio.Mithrandir*|*io.github.antonio.Mitrandil*) ;; *) rm -rf "$d"/* ;; esac; done'
+                ]
+                code, out, err = HostBridge.run_command(clean_cmd, timeout=15)
+                return (code == 0), "Flatpak applications cache cleaned." if code == 0 else err
         elif item_id == 'systemd_journal':
             code, out, err = HostBridge.run_command(['journalctl', '--vacuum-time=2d', '--vacuum-size=20M'], use_pkexec=True)
             return (code == 0), out if code == 0 else err

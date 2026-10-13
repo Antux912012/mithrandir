@@ -20,21 +20,65 @@ class HostBridge:
     def which(cls, binary: str) -> Optional[str]:
         """Checks if a binary is available on the host."""
         if cls.is_flatpak():
-            code, out, _ = cls.run_command(['which', binary], timeout=5)
+            code, out, _ = cls.run_command(['sh', '-c', f'command -v "{binary}" || which "{binary}"'], timeout=5)
             if code == 0 and out.strip():
                 return out.strip().splitlines()[0]
             return None
         return shutil.which(binary)
 
     @classmethod
-    def run_command(cls, cmd: List[str], use_pkexec: bool = False, timeout: Optional[int] = 30) -> Tuple[int, str, str]:
+    def file_exists(cls, path: str) -> bool:
+        """Checks if a file exists on the host."""
+        if cls.is_flatpak():
+            if os.path.isfile(path):
+                return True
+            code, _, _ = cls.run_command(['test', '-f', path], timeout=4)
+            return code == 0
+        return os.path.isfile(path)
+
+    @classmethod
+    def dir_exists(cls, path: str) -> bool:
+        """Checks if a directory exists on the host."""
+        if cls.is_flatpak():
+            if os.path.isdir(path):
+                return True
+            code, _, _ = cls.run_command(['test', '-d', path], timeout=4)
+            return code == 0
+        return os.path.isdir(path)
+
+    @classmethod
+    def get_file_mtime(cls, path: str) -> float:
+        """Retrieves modification timestamp of a file on the host."""
+        if cls.is_flatpak():
+            if os.path.exists(path):
+                try:
+                    return os.path.getmtime(path)
+                except OSError:
+                    pass
+            code, out, _ = cls.run_command(['stat', '-c', '%Y', path], timeout=4)
+            if code == 0 and out.strip().isdigit():
+                return float(out.strip())
+            return 0.0
+        try:
+            return os.path.getmtime(path)
+        except OSError:
+            return 0.0
+
+    @classmethod
+    def run_command(
+        cls,
+        cmd: List[str],
+        use_pkexec: bool = False,
+        timeout: Optional[int] = 30,
+        input: Optional[str] = None
+    ) -> Tuple[int, str, str]:
         """
         Executes an allowlisted command on the host.
         Returns (returncode, stdout, stderr).
         """
         full_cmd = []
         if cls.is_flatpak():
-            full_cmd = ['flatpak-spawn', '--host']
+            full_cmd = ['flatpak-spawn', '--host', '--watch-bus']
 
         cmd_parts = list(cmd)
         if cmd_parts:
@@ -50,6 +94,7 @@ class HostBridge:
         try:
             res = subprocess.run(
                 full_cmd,
+                input=input,
                 capture_output=True,
                 text=True,
                 timeout=timeout
@@ -77,7 +122,7 @@ class HostBridge:
         """
         prefix = []
         if cls.is_flatpak():
-            prefix = ['flatpak-spawn', '--host']
+            prefix = ['flatpak-spawn', '--host', '--watch-bus']
 
         if nice_priority is not None and cls.which('nice'):
             prefix.extend(['nice', '-n', str(nice_priority)])
@@ -138,8 +183,25 @@ class HostBridge:
 
     @classmethod
     def read_host_file(cls, path: str) -> Optional[str]:
-        """Reads a file from the host filesystem."""
+        """
+        Reads a file from the host filesystem.
+        Optimized to read /proc and /sys directly in sub-millisecond time.
+        """
+        if path.startswith(('/proc/', '/sys/')):
+            try:
+                with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                    return f.read()
+            except Exception:
+                pass
+
         if cls.is_flatpak():
+            try:
+                if os.path.isfile(path):
+                    with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                        return f.read()
+            except Exception:
+                pass
+
             code, out, _ = cls.run_command(['cat', path], timeout=5)
             if code == 0:
                 return out
@@ -150,4 +212,5 @@ class HostBridge:
                     return f.read()
             except Exception:
                 return None
+
 

@@ -144,8 +144,8 @@ class ProcessesPage(Gtk.ScrolledWindow):
         # Show top 50 processes for ultra-smooth UI performance
         for p in filtered[:50]:
             row = Adw.ActionRow()
-            row.set_title(f"{p['name']} (PID: {p['pid']})")
-            row.set_subtitle(f"User: {p['user']} • Status: {p['status']}")
+            row.set_title(GLib.markup_escape_text(f"{p['name']} (PID: {p['pid']})"))
+            row.set_subtitle(GLib.markup_escape_text(f"User: {p['user']} • Status: {p['status']}"))
 
             # Right badges & buttons
             info_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)

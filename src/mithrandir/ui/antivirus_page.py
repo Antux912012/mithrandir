@@ -76,7 +76,7 @@ class AntivirusPage(Gtk.ScrolledWindow):
 
     def _build_status_group(self):
         self.status_group = Adw.PreferencesGroup()
-        self.status_group.set_title("Engine & Definition Status")
+        self.status_group.set_title("Engine &amp; Definition Status")
         self.status_group.set_description("ClamAV anti-malware engine and signature database configuration")
         self.box.append(self.status_group)
 
@@ -103,7 +103,7 @@ class AntivirusPage(Gtk.ScrolledWindow):
 
         # Definitions Row
         self.def_row = Adw.ActionRow()
-        self.def_row.set_title("Virus & Ransomware Definitions")
+        self.def_row.set_title("Virus &amp; Ransomware Definitions")
         self.def_row.set_subtitle("Inspecting signature database...")
 
         def_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -138,7 +138,7 @@ class AntivirusPage(Gtk.ScrolledWindow):
 
         # Installation & FreshClam Instructions Expander Row
         self.instructions_expander = Adw.ExpanderRow()
-        self.instructions_expander.set_title("How to Install & Configure clamav-freshclam")
+        self.instructions_expander.set_title("How to Install &amp; Configure clamav-freshclam")
         self.instructions_expander.set_subtitle("Terminal commands and setup instructions for your Linux distribution")
         self.instructions_expander.set_icon_name("help-about-symbolic")
 
@@ -162,7 +162,7 @@ class AntivirusPage(Gtk.ScrolledWindow):
 
         # Debian / Ubuntu package instruction row
         row_deb = Adw.ActionRow()
-        row_deb.set_title("Debian, Ubuntu & Linux Mint package names")
+        row_deb.set_title("Debian, Ubuntu &amp; Linux Mint package names")
         row_deb.set_subtitle("sudo apt-get install -y clamav clamav-daemon clamav-freshclam")
         copy_deb_btn = Gtk.Button(icon_name="edit-copy-symbolic")
         copy_deb_btn.set_tooltip_text("Copy Debian command")
@@ -180,7 +180,7 @@ class AntivirusPage(Gtk.ScrolledWindow):
 
         # Fedora & RHEL row
         row_fedora = Adw.ActionRow()
-        row_fedora.set_title("Fedora, RHEL & Rocky Linux package names")
+        row_fedora.set_title("Fedora, RHEL &amp; Rocky Linux package names")
         row_fedora.set_subtitle("sudo dnf install -y clamav clamd clamav-update")
         copy_fedora_btn = Gtk.Button(icon_name="edit-copy-symbolic")
         copy_fedora_btn.set_tooltip_text("Copy Fedora command")
@@ -198,7 +198,7 @@ class AntivirusPage(Gtk.ScrolledWindow):
 
         # Arch & openSUSE row
         row_arch = Adw.ActionRow()
-        row_arch.set_title("Arch Linux & openSUSE package names")
+        row_arch.set_title("Arch Linux &amp; openSUSE package names")
         row_arch.set_subtitle("Arch: sudo pacman -S clamav • openSUSE: sudo zypper install clamav")
         copy_arch_btn = Gtk.Button(icon_name="edit-copy-symbolic")
         copy_arch_btn.set_tooltip_text("Copy Arch command")

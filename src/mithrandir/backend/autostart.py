@@ -1,6 +1,7 @@
 import os
 import configparser
 from typing import List, Dict, Any, Optional
+from .host_bridge import HostBridge
 
 class AutostartManager:
     """
@@ -194,7 +195,11 @@ Terminal=false
                     return cls.toggle_entry(cls.MITHRANDIR_DESKTOP_ID, False)
             return True
 
-        exec_cmd = "mithrandir"
+        if HostBridge.is_flatpak():
+            exec_cmd = "flatpak run io.github.antonio.Mithrandir"
+        else:
+            exec_cmd = "mithrandir"
+
         if start_in_background:
             exec_cmd += " --background"
 

@@ -45,6 +45,85 @@ class TestMithrandir(unittest.TestCase):
         self.assertIn('total_mb', mem)
         self.assertGreater(mem['total_mb'], 0)
 
+    def test_monitor_battery_live(self):
+        """Check system monitor battery reading structure and types."""
+        bat = SystemMonitor.get_battery_info()
+        self.assertIn('present', bat)
+        self.assertIn('real_capacity_wh', bat)
+        self.assertIn('design_capacity_wh', bat)
+        self.assertIn('capacity_percent', bat)
+        self.assertIn('status', bat)
+        self.assertIsInstance(bat['present'], bool)
+        self.assertIsInstance(bat['real_capacity_wh'], (int, float))
+        self.assertIsInstance(bat['design_capacity_wh'], (int, float))
+        self.assertIsInstance(bat['capacity_percent'], (int, float))
+        if bat['present']:
+            self.assertGreater(bat['design_capacity_wh'], 0.0)
+            self.assertGreaterEqual(bat['real_capacity_wh'], 0.0)
+            self.assertGreaterEqual(bat['capacity_percent'], 0.0)
+
+    def test_monitor_battery_energy_mock(self):
+        """Test battery calculation when energy_full and energy_full_design are reported."""
+        from unittest.mock import patch
+        mock_files = {
+            '/sys/class/power_supply/BAT0/type': 'Battery\n',
+            '/sys/class/power_supply/BAT0/present': '1\n',
+            '/sys/class/power_supply/BAT0/energy_full': '40000000\n',  # 40 Wh
+            '/sys/class/power_supply/BAT0/energy_full_design': '50000000\n',  # 50 Wh
+            '/sys/class/power_supply/BAT0/energy_now': '30000000\n',
+            '/sys/class/power_supply/BAT0/status': 'Discharging\n',
+            '/sys/class/power_supply/BAT0/model_name': 'TestModel\n',
+            '/sys/class/power_supply/BAT0/manufacturer': 'TestVendor\n'
+        }
+        with patch('os.path.isdir', return_value=True), \
+             patch('os.listdir', return_value=['BAT0']), \
+             patch('mithrandir.backend.host_bridge.HostBridge.read_host_file', side_effect=lambda p: mock_files.get(p)):
+            res = SystemMonitor.get_battery_info()
+            self.assertTrue(res['present'])
+            self.assertEqual(res['real_capacity_wh'], 40.0)
+            self.assertEqual(res['design_capacity_wh'], 50.0)
+            self.assertEqual(res['capacity_percent'], 80.0)
+            self.assertEqual(res['status'], 'Discharging')
+            self.assertEqual(res['model'], 'TestModel')
+            self.assertEqual(res['vendor'], 'TestVendor')
+
+    def test_monitor_battery_charge_mock(self):
+        """Test battery calculation when charge_full and voltage are reported."""
+        from unittest.mock import patch
+        # 4,000,000 µAh * 12,000,000 µV / 10^12 = 48.0 Wh
+        # 5,000,000 µAh * 12,000,000 µV / 10^12 = 60.0 Wh
+        mock_files = {
+            '/sys/class/power_supply/BAT1/type': 'Battery\n',
+            '/sys/class/power_supply/BAT1/present': '1\n',
+            '/sys/class/power_supply/BAT1/energy_full': None,
+            '/sys/class/power_supply/BAT1/charge_full': '4000000\n',
+            '/sys/class/power_supply/BAT1/charge_full_design': '5000000\n',
+            '/sys/class/power_supply/BAT1/voltage_min_design': '12000000\n',
+            '/sys/class/power_supply/BAT1/status': 'Full\n',
+        }
+        with patch('os.path.isdir', return_value=True), \
+             patch('os.listdir', return_value=['BAT1']), \
+             patch('mithrandir.backend.host_bridge.HostBridge.read_host_file', side_effect=lambda p: mock_files.get(p)):
+            res = SystemMonitor.get_battery_info()
+            self.assertTrue(res['present'])
+            self.assertEqual(res['real_capacity_wh'], 48.0)
+            self.assertEqual(res['design_capacity_wh'], 60.0)
+            self.assertEqual(res['capacity_percent'], 80.0)
+            self.assertEqual(res['status'], 'Full')
+
+    def test_monitor_battery_absent_mock(self):
+        """Test battery response when no battery is present."""
+        from unittest.mock import patch
+        with patch('os.path.isdir', return_value=True), \
+             patch('os.listdir', return_value=[]), \
+             patch('mithrandir.backend.host_bridge.HostBridge.which', return_value=None):
+            res = SystemMonitor.get_battery_info()
+            self.assertFalse(res['present'])
+            self.assertEqual(res['real_capacity_wh'], 0.0)
+            self.assertEqual(res['design_capacity_wh'], 0.0)
+            self.assertEqual(res['capacity_percent'], 0.0)
+            self.assertEqual(res['status'], 'N/A')
+
     def test_package_manager(self):
         """Check PackageManager native type and PackageItem creation."""
         from mithrandir.backend.packages import PackageManager, PackageItem
@@ -159,6 +238,34 @@ class TestMithrandir(unittest.TestCase):
         rates = SystemMonitor.get_network_rates()
         self.assertIn('rx_str', rates)
         self.assertIn('tx_str', rates)
+
+    def test_host_bridge_fs_queries(self):
+        """Check HostBridge host file existence, dir existence, and mtime helpers."""
+        from mithrandir.backend.host_bridge import HostBridge
+        self.assertTrue(HostBridge.dir_exists('/etc'))
+        self.assertTrue(HostBridge.file_exists('/etc/passwd') or HostBridge.file_exists('/etc/os-release'))
+        self.assertFalse(HostBridge.file_exists('/nonexistent_path_mithrandir_test'))
+        self.assertFalse(HostBridge.dir_exists('/nonexistent_path_mithrandir_test_dir'))
+        if HostBridge.file_exists('/etc/passwd'):
+            self.assertGreater(HostBridge.get_file_mtime('/etc/passwd'), 0.0)
+
+    def test_process_manager_host_ps_parsing(self):
+        """Check ProcessManager host ps stdout parser."""
+        from mithrandir.backend.processes import ProcessManager
+        sample_ps = (
+            "         1 root                   0.0      0.1        12288 Ss       systemd                        /sbin/init splash\n"
+            "       100 antonio                2.5      5.0       102400 Sl       mithrandir                     python3 -m mithrandir.main\n"
+        )
+        procs = ProcessManager._parse_host_ps(sample_ps)
+        self.assertEqual(len(procs), 2)
+        self.assertEqual(procs[0]['pid'], 1)
+        self.assertEqual(procs[0]['user'], 'root')
+        self.assertEqual(procs[0]['name'], 'systemd')
+        self.assertEqual(procs[1]['pid'], 100)
+        self.assertEqual(procs[1]['user'], 'antonio')
+        self.assertEqual(procs[1]['name'], 'mithrandir')
+        self.assertEqual(procs[1]['cpu_percent'], 2.5)
+        self.assertEqual(procs[1]['mem_percent'], 5.0)
 
 if __name__ == '__main__':
     unittest.main()

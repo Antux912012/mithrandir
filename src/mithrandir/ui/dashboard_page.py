@@ -62,7 +62,7 @@ class DashboardPage(Gtk.ScrolledWindow):
     """
     Overview page with:
     - Microsoft PC Manager-inspired Smart Boost hero banner with one-click boost
-    - Real-time sensor tiles (CPU, RAM, Disk, Temp, GPU0, GPU1, Network DL/UL)
+    - Real-time sensor tiles (CPU, RAM, Disk, Temp, Battery, GPU0, GPU1, Network DL/UL)
     - Host system overview
     - Kinetic scrolling enabled
     """
@@ -91,7 +91,7 @@ class DashboardPage(Gtk.ScrolledWindow):
 
         self.flow_box = Gtk.FlowBox()
         self.flow_box.set_valign(Gtk.Align.START)
-        self.flow_box.set_max_children_per_line(4)
+        self.flow_box.set_max_children_per_line(5)
         self.flow_box.set_min_children_per_line(2)
         self.flow_box.set_selection_mode(Gtk.SelectionMode.NONE)
         self.flow_box.set_column_spacing(16)
@@ -101,6 +101,7 @@ class DashboardPage(Gtk.ScrolledWindow):
         self.tile_mem = MetricTile("Memory", "drive-harddisk-symbolic")
         self.tile_disk = MetricTile("Root Disk", "drive-multidisk-symbolic")
         self.tile_temp = MetricTile("Temperature", "weather-clear-symbolic")
+        self.tile_battery = MetricTile("Battery", "battery-symbolic")
         self.tile_net_dl = MetricTile("Download", "network-receive-symbolic")
         self.tile_net_ul = MetricTile("Upload", "network-transmit-symbolic")
         self.tile_gpu0 = MetricTile("GPU 0", "video-display-symbolic")
@@ -110,6 +111,7 @@ class DashboardPage(Gtk.ScrolledWindow):
         self.flow_box.append(self.tile_mem)
         self.flow_box.append(self.tile_disk)
         self.flow_box.append(self.tile_temp)
+        self.flow_box.append(self.tile_battery)
         self.flow_box.append(self.tile_net_dl)
         self.flow_box.append(self.tile_net_ul)
         self.flow_box.append(self.tile_gpu0)
@@ -344,6 +346,29 @@ class DashboardPage(Gtk.ScrolledWindow):
         cpu_temp = temps.get('cpu_temp', 0.0)
         temp_fraction = cpu_temp / 100.0 if cpu_temp > 0 else 0.0
         self.tile_temp.set_data(f"{cpu_temp}°C", temp_fraction, "CPU Package")
+
+        # Battery (Real Capacity vs Maximum Design Capacity in Wh)
+        bat = SystemMonitor.get_battery_info()
+        if bat.get('present', False) and bat.get('design_capacity_wh', 0.0) > 0:
+            health_pct = bat.get('capacity_percent', 0.0)
+            real_wh = bat.get('real_capacity_wh', 0.0)
+            design_wh = bat.get('design_capacity_wh', 0.0)
+            frac = real_wh / design_wh if design_wh > 0 else 0.0
+            self.tile_battery.set_data(
+                f"{health_pct:.1f}%",
+                frac,
+                f"{real_wh:.1f} / {design_wh:.1f} Wh"
+            )
+            status_text = f" · {bat['status']}" if bat.get('status') and bat['status'] != 'Unknown' else ""
+            self.tile_battery.set_tooltip_text(
+                f"Battery Health: {health_pct:.1f}%\n"
+                f"Real Capacity: {real_wh:.2f} Wh\n"
+                f"Design Capacity: {design_wh:.2f} Wh"
+                f"{status_text}"
+            )
+        else:
+            self.tile_battery.set_data("N/A", 0.0, "No Battery")
+            self.tile_battery.set_tooltip_text("No battery detected on this system")
 
         # Network Telemetry (Stacer feature)
         net_rates = SystemMonitor.get_network_rates()

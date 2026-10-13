@@ -11,6 +11,7 @@
     "--socket=wayland",
     "--device=dri",
     "--filesystem=home",
+    "--filesystem=~/.var/app",
     "--filesystem=xdg-cache",
     "--filesystem=xdg-config/autostart",
     "--talk-name=org.freedesktop.Flatpak",

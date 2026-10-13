@@ -38,8 +38,8 @@ class BtrfsManager:
                 root_fstype = parts[0]
                 root_source = parts[1]
 
-        has_btrfs_cmd = (HostBridge.run_command(['which', 'btrfs'])[0] == 0)
-        has_snapper = (HostBridge.run_command(['which', 'snapper'])[0] == 0)
+        has_btrfs_cmd = (HostBridge.which('btrfs') is not None)
+        has_snapper = (HostBridge.which('snapper') is not None)
 
         return {
             'is_btrfs': len(btrfs_mounts) > 0 or (root_fstype == 'btrfs'),
@@ -115,7 +115,7 @@ class BtrfsManager:
             return False, f"Root filesystem is {status['root_fstype']}, not BTRFS. Snapshots are only available on BTRFS."
 
         safe_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', name.strip()) or f"snapshot_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        dest_dir = "/.snapshots" if os.path.isdir('/.snapshots') else os.path.join(source_path, ".snapshots")
+        dest_dir = "/.snapshots" if HostBridge.dir_exists('/.snapshots') else os.path.join(source_path, ".snapshots")
         dest_path = os.path.join(dest_dir, safe_name)
 
         flags = ['-r'] if read_only else []

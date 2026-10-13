@@ -256,7 +256,7 @@ class UninstallerPage(Gtk.ScrolledWindow):
         display_list = filtered[:display_limit]
 
         for pkg in display_list:
-            row = Adw.ActionRow(title=pkg.name)
+            row = Adw.ActionRow(title=GLib.markup_escape_text(pkg.name))
             sub = f"v{pkg.version}" if pkg.version else ""
             if 'python' in pkg.kind:
                 tag = getattr(pkg, 'manager', '') or pkg.kind.replace('python', '').strip(' ()')
@@ -270,7 +270,7 @@ class UninstallerPage(Gtk.ScrolledWindow):
                 if pkg.summary:
                     sub = f"{sub} — {pkg.summary[:45]}" if sub else pkg.summary[:45]
 
-            row.set_subtitle(sub or "Installed package")
+            row.set_subtitle(GLib.markup_escape_text(sub or "Installed package"))
 
             # Determine icon
             if 'python' in pkg.kind:

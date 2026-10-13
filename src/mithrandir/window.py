@@ -294,7 +294,9 @@ class MithrandirWindow(Adw.ApplicationWindow):
         about.set_application_name("Mithrandir")
         about.set_application_icon("io.github.antonio.Mithrandir")
         about.set_developer_name("Antonio")
-        about.set_version("0.3.0")
+        app = self.get_application()
+        version = getattr(app, 'version', '0.3.5') if app else '0.3.5'
+        about.set_version(version)
         about.set_comments("Modern GNU/Linux Cleaner, Maintenance, Optimizer, and AI Diagnostics")
         about.set_website("https://github.com/Antux912012/mithrandir")
         about.set_issue_url("https://github.com/Antux912012/mithrandir/issues")

@@ -1,4 +1,5 @@
 import os
+import re
 import glob
 from typing import Dict, List, Optional
 from .host_bridge import HostBridge
@@ -102,20 +103,26 @@ class SystemMonitor:
         for zone in range(8):
             path = f"/sys/class/thermal/thermal_zone{zone}/temp"
             val = HostBridge.read_host_file(path)
-            if val and val.strip().isdigit():
-                t = int(val.strip()) / 1000.0
-                if 10.0 <= t <= 115.0:
-                    temps.append(t)
+            if val:
+                try:
+                    t = float(val.strip()) / 1000.0
+                    if 10.0 <= t <= 115.0:
+                        temps.append(t)
+                except ValueError:
+                    pass
 
         # Check hwmon
         for hwmon in range(8):
             for t_idx in range(1, 6):
                 path = f"/sys/class/hwmon/hwmon{hwmon}/temp{t_idx}_input"
                 val = HostBridge.read_host_file(path)
-                if val and val.strip().isdigit():
-                    t = int(val.strip()) / 1000.0
-                    if 10.0 <= t <= 115.0:
-                        temps.append(t)
+                if val:
+                    try:
+                        t = float(val.strip()) / 1000.0
+                        if 10.0 <= t <= 115.0:
+                            temps.append(t)
+                    except ValueError:
+                        pass
 
         cpu_temp = round(max(temps), 1) if temps else 0.0
         return {'cpu_temp': cpu_temp}
@@ -138,8 +145,14 @@ class SystemMonitor:
                 parts = [p.strip() for p in line.split(',')]
                 if len(parts) >= 3:
                     name = parts[0]
-                    util = float(parts[1]) if parts[1].isdigit() else 0.0
-                    temp = float(parts[2]) if parts[2].isdigit() else 0.0
+                    try:
+                        util = float(parts[1])
+                    except (ValueError, IndexError):
+                        util = 0.0
+                    try:
+                        temp = float(parts[2])
+                    except (ValueError, IndexError):
+                        temp = 0.0
                     gpus.append({
                         'id': f'GPU{idx}',
                         'name': name,
@@ -173,8 +186,11 @@ class SystemMonitor:
             busy_path = f"{card_path}/device/gpu_busy_percent"
             busy_str = HostBridge.read_host_file(busy_path)
             busy = 0.0
-            if busy_str and busy_str.strip().isdigit():
-                busy = float(busy_str.strip())
+            if busy_str:
+                try:
+                    busy = float(busy_str.strip())
+                except ValueError:
+                    busy = 0.0
 
             gpus.append({
                 'id': f'GPU{card_idx}',
@@ -246,3 +262,176 @@ class SystemMonitor:
             'rx_str': fmt_rate(rx_rate),
             'tx_str': fmt_rate(tx_rate)
         }
+
+    @classmethod
+    def get_battery_info(cls) -> Dict[str, any]:
+        """
+        Retrieves battery health and capacity telemetry from /sys/class/power_supply or upower.
+        Returns a dictionary containing:
+        - present (bool): True if at least one battery is found and present
+        - real_capacity_wh (float): Actual maximum capacity when full in Wh
+        - design_capacity_wh (float): Original design maximum capacity in Wh
+        - capacity_percent (float): Battery health ratio (real / design * 100)
+        - energy_now_wh (float): Current stored energy in Wh
+        - status (str): Charging, Discharging, Full, Not charging, etc.
+        - model (str): Battery model name
+        - vendor (str): Battery manufacturer
+        """
+        power_dir = '/sys/class/power_supply'
+        devices = []
+        if os.path.isdir(power_dir):
+            try:
+                devices = os.listdir(power_dir)
+            except Exception:
+                pass
+
+        if not devices and HostBridge.is_flatpak():
+            code, out, _ = HostBridge.run_command(['ls', power_dir], timeout=3)
+            if code == 0 and out:
+                devices = out.split()
+
+        total_real_wh = 0.0
+        total_design_wh = 0.0
+        total_now_wh = 0.0
+        found_any = False
+        status = 'Unknown'
+        model = ''
+        vendor = ''
+
+        for dev in sorted(devices):
+            dev_path = f'{power_dir}/{dev}'
+            type_str = HostBridge.read_host_file(f'{dev_path}/type')
+            is_battery = False
+            if type_str and 'battery' in type_str.strip().lower():
+                is_battery = True
+            elif not type_str and dev.lower().startswith('bat'):
+                is_battery = True
+
+            if not is_battery:
+                continue
+
+            present_str = HostBridge.read_host_file(f'{dev_path}/present')
+            if present_str and present_str.strip() == '0':
+                continue
+
+            real_wh = 0.0
+            design_wh = 0.0
+            now_wh = 0.0
+
+            # 1. Try direct energy readings (in micro-Watt-hours: µWh)
+            ef_str = HostBridge.read_host_file(f'{dev_path}/energy_full')
+            efd_str = HostBridge.read_host_file(f'{dev_path}/energy_full_design')
+            en_str = HostBridge.read_host_file(f'{dev_path}/energy_now')
+
+            if ef_str and efd_str:
+                try:
+                    real_wh = float(ef_str.strip()) / 1_000_000.0
+                    design_wh = float(efd_str.strip()) / 1_000_000.0
+                    if en_str:
+                        now_wh = float(en_str.strip()) / 1_000_000.0
+                except ValueError:
+                    pass
+            else:
+                # 2. Fallback to charge readings (in µAh) and voltage (in µV)
+                cf_str = HostBridge.read_host_file(f'{dev_path}/charge_full')
+                cfd_str = HostBridge.read_host_file(f'{dev_path}/charge_full_design')
+                cn_str = HostBridge.read_host_file(f'{dev_path}/charge_now')
+                vmin_str = HostBridge.read_host_file(f'{dev_path}/voltage_min_design')
+                vnow_str = HostBridge.read_host_file(f'{dev_path}/voltage_now')
+                v_uV = None
+                if vmin_str:
+                    try:
+                        v_uV = float(vmin_str.strip())
+                    except ValueError:
+                        pass
+                elif vnow_str:
+                    try:
+                        v_uV = float(vnow_str.strip())
+                    except ValueError:
+                        pass
+
+                if cf_str and cfd_str and v_uV and v_uV > 0:
+                    try:
+                        real_wh = (float(cf_str.strip()) * v_uV) / 1e12
+                        design_wh = (float(cfd_str.strip()) * v_uV) / 1e12
+                        if cn_str:
+                            now_wh = (float(cn_str.strip()) * v_uV) / 1e12
+                    except ValueError:
+                        pass
+
+            if design_wh > 0:
+                found_any = True
+                total_real_wh += real_wh
+                total_design_wh += design_wh
+                total_now_wh += now_wh
+                st = HostBridge.read_host_file(f'{dev_path}/status')
+                if st and st.strip():
+                    status = st.strip()
+                md = HostBridge.read_host_file(f'{dev_path}/model_name')
+                if md and md.strip():
+                    model = md.strip()
+                vn = HostBridge.read_host_file(f'{dev_path}/manufacturer')
+                if vn and vn.strip():
+                    vendor = vn.strip()
+
+        # 3. UPower fallback if sysfs produced no battery data
+        if not found_any and HostBridge.which('upower'):
+            code, out, _ = HostBridge.run_command(['upower', '-e'], timeout=3)
+            if code == 0 and out:
+                devs = [l.strip() for l in out.splitlines() if 'battery' in l.lower()]
+                for u_dev in devs:
+                    c, info, _ = HostBridge.run_command(['upower', '-i', u_dev], timeout=3)
+                    if c != 0 or not info:
+                        continue
+                    data = {}
+                    for line in info.splitlines():
+                        parts = line.split(':', 1)
+                        if len(parts) == 2:
+                            data[parts[0].strip()] = parts[1].strip()
+
+                    ef_m = re.search(r'([0-9.]+)\s*Wh', data.get('energy-full', ''))
+                    efd_m = re.search(r'([0-9.]+)\s*Wh', data.get('energy-full-design', ''))
+                    en_m = re.search(r'([0-9.]+)\s*Wh', data.get('energy', ''))
+                    if ef_m and efd_m:
+                        try:
+                            r_wh = float(ef_m.group(1))
+                            d_wh = float(efd_m.group(1))
+                            if d_wh > 0:
+                                total_real_wh += r_wh
+                                total_design_wh += d_wh
+                                if en_m:
+                                    total_now_wh += float(en_m.group(1))
+                                found_any = True
+                                if 'state' in data:
+                                    status = data['state'].capitalize()
+                                if 'model' in data:
+                                    model = data['model']
+                                if 'vendor' in data:
+                                    vendor = data['vendor']
+                        except ValueError:
+                            pass
+
+        if not found_any or total_design_wh <= 0:
+            return {
+                'present': False,
+                'real_capacity_wh': 0.0,
+                'design_capacity_wh': 0.0,
+                'energy_now_wh': 0.0,
+                'capacity_percent': 0.0,
+                'status': 'N/A',
+                'model': '',
+                'vendor': ''
+            }
+
+        cap_pct = round((total_real_wh / total_design_wh) * 100.0, 1)
+        return {
+            'present': True,
+            'real_capacity_wh': round(total_real_wh, 2),
+            'design_capacity_wh': round(total_design_wh, 2),
+            'energy_now_wh': round(total_now_wh, 2),
+            'capacity_percent': cap_pct,
+            'status': status,
+            'model': model,
+            'vendor': vendor
+        }
+

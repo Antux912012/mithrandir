@@ -30,6 +30,42 @@
   </branding>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.3.5" date="2026-10-13">
+      <description>
+        <p>Production release v0.3.5 with new official application icon and full asset set:</p>
+        <ul>
+          <li>Introduced new custom wizard iconography in scalable SVG and all standard hicolor dimensions (16x16 through 512x512)</li>
+          <li>Refactored and hardened Flatpak sandbox boundary and D-Bus host communication</li>
+          <li>Real-time telemetry performance optimizations with zero D-Bus overhead</li>
+          <li>Enhanced ClamAV malware protection, FreshClam synchronization, and quarantine manager</li>
+          <li>Updated documentation and packaging metadata</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.1" date="2026-10-13">
+      <description>
+        <p>Flatpak sandboxing overhaul and performance improvements:</p>
+        <ul>
+          <li>Fixed host process visibility and process termination in Flatpak environments</li>
+          <li>Optimized hardware and sensor polling with zero D-Bus overhead for fluid GUI performance</li>
+          <li>Added support for Flatpak cache directory inspection and cleaning</li>
+          <li>Fixed ClamAV CVD database validation and host quarantine restoration in Flatpak</li>
+          <li>Fixed GRUB configuration manager and update detection in Flatpak</li>
+          <li>Fixed autostart command generation for Flatpak installs</li>
+          <li>Fixed Pango markup escaping in process manager and uninstaller views</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.0" date="2026-10-12">
+      <description>
+        <p>ClamAV antivirus integration, quarantine vault, Python package management, and system optimizer suite.</p>
+      </description>
+    </release>
+    <release version="0.2.0" date="2026-10-11">
+      <description>
+        <p>Btrfs/Snapper snapshot management, GRUB bootloader editor, and Smart Boost background optimization.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-10-11">
       <description>
         <p>Initial release of Mithrandir with cleaner, monitoring, and AI diagnostic capabilities.</p>
