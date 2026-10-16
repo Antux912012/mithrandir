@@ -253,11 +253,17 @@ class DashboardPage(Gtk.ScrolledWindow):
         self.boost_btn.set_label("🚀 Boost")
         self._update_metrics()
 
+        if res.get('already_running', False):
+            if self.toast_overlay:
+                self.toast_overlay.add_toast(Adw.Toast.new("Smart Boost is already running."))
+            return False
+
         reclaimed_ram = res.get('ram_reclaimed_mb', 0.0)
         freed_disk = res.get('disk_freed_mb', 0.0)
         msg = f"Boost Complete! Freed {reclaimed_ram:.1f} MB RAM and {freed_disk:.1f} MB temporary files."
         if self.toast_overlay:
             self.toast_overlay.add_toast(Adw.Toast.new(msg))
+        return False
 
     def _on_personalise_clicked(self, _btn):
         # Open personalisation dialog

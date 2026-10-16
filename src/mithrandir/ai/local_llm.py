@@ -1,61 +1,99 @@
+import os
 import json
 import re
 import threading
+import subprocess
+import platform
+import zipfile
+import shutil
+import time
 import urllib.request
 import urllib.error
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from ..backend.host_bridge import HostBridge
 from ..backend.monitor import SystemMonitor
 
 
-RECOMMENDED_MINI_MODELS: List[Dict[str, str]] = [
+RECOMMENDED_QWEN_GGUF_MODELS: List[Dict[str, str]] = [
     {
-        "id": "qwen2.5:1.5b",
-        "name": "Qwen 2.5 (1.5B) — Recommended for Linux Tasks",
+        "id": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+        "name": "Qwen 2.5 (1.5B Instruct Q4_K_M) — Recommended In-App Mini-LLM",
         "size": "~986 MB",
         "ram_required": "2 GB RAM",
-        "description": "Fast CPU inference (~30 tok/s on laptop CPUs). Excellent at Linux commands, bash, and systemd diagnostics.",
+        "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+        "description": "Fast CPU inference (~30 tok/s on laptops). Excellent at Linux system commands, bash, and diagnostics.",
     },
     {
-        "id": "qwen2.5-coder:1.5b",
-        "name": "Qwen 2.5 Coder (1.5B) — Shell & Config Specialist",
+        "id": "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+        "name": "Qwen 2.5 Coder (1.5B Instruct Q4_K_M) — Shell & Script Specialist",
         "size": "~986 MB",
         "ram_required": "2 GB RAM",
-        "description": "Tuned for shell scripting, system configuration files, and CLI command generation.",
+        "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+        "description": "Specialized in shell scripting, configuration files, and terminal CLI command generation.",
+    },
+    {
+        "id": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+        "name": "Qwen 2.5 (0.5B Instruct Q4_K_M) — Ultra-Lightweight Edge Model",
+        "size": "~398 MB",
+        "ram_required": "1 GB RAM",
+        "url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+        "description": "Ultra-compact model for minimal CPU/RAM footprint on older or resource-constrained PCs.",
+    },
+]
+
+RECOMMENDED_MINI_MODELS: List[Dict[str, str]] = RECOMMENDED_QWEN_GGUF_MODELS + [
+    {
+        "id": "qwen2.5:1.5b",
+        "name": "Qwen 2.5 (1.5B) — Ollama Version",
+        "size": "~986 MB",
+        "ram_required": "2 GB RAM",
+        "url": "",
+        "description": "Fast CPU inference via external Ollama service.",
     },
     {
         "id": "llama3.2:1b",
         "name": "Llama 3.2 (1B) — Ultra-Light Edge Model",
         "size": "~1.3 GB",
         "ram_required": "2 GB RAM",
-        "description": "Meta's ultra-compact instruction model for low-resource Linux laptops and desktops.",
+        "url": "",
+        "description": "Meta's ultra-compact instruction model for low-resource Linux systems.",
     },
     {
         "id": "smollm2:1.7b",
         "name": "SmolLM2 (1.7B) — Compact On-Device Assistant",
         "size": "~1.0 GB",
         "ram_required": "2.5 GB RAM",
+        "url": "",
         "description": "HuggingFace's compact model designed specifically for local CPU execution.",
-    },
-    {
-        "id": "llama3.2:3b",
-        "name": "Llama 3.2 (3B) — Balanced Reasoning",
-        "size": "~2.0 GB",
-        "ram_required": "4 GB RAM",
-        "description": "Deeper multi-step troubleshooting and log analysis for systems with 8GB+ RAM.",
     },
 ]
 
 
 class LocalLLMManager:
     """
-    Manages local offline AI runtimes (Ollama, LM Studio, llama.cpp) and provides
+    Manages local offline AI runtimes (in-app llama.cpp engine, Ollama, LM Studio) and provides
     a built-in zero-dependency Linux Mini-Assistant for offline diagnostics and generic Linux tasks.
     """
 
+    APP_DATA_DIR = os.path.expanduser("~/.local/share/io.github.antonio.Mithrandir/llm")
+    BIN_DIR = os.path.join(APP_DATA_DIR, "bin")
+    MODELS_DIR = os.path.join(APP_DATA_DIR, "models")
+    LLAMACPP_PORT = 18080
+    LLAMACPP_BASE_URL = f"http://127.0.0.1:{LLAMACPP_PORT}/v1"
+
+    _llama_proc: Optional[subprocess.Popen] = None
+    _llama_proc_lock: threading.Lock = threading.Lock()
+    _active_model: Optional[str] = None
+
     PROVIDER_PRESETS: Dict[str, Dict[str, str]] = {
+        "llamacpp": {
+            "label": "Mithrandir In-App Mini-LLM (Qwen 2.5 + llama.cpp — Offline)",
+            "base_url": "http://127.0.0.1:18080/v1",
+            "default_model": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+            "needs_key": "false",
+        },
         "builtin": {
-            "label": "Built-in Linux Mini-Assistant (Offline, Zero-Config)",
+            "label": "Built-in Linux Mini-Assistant (Offline, Zero-Download)",
             "base_url": "builtin://linux-mini",
             "default_model": "builtin-linux-mini",
             "needs_key": "false",
@@ -69,12 +107,6 @@ class LocalLLMManager:
         "lmstudio": {
             "label": "LM Studio (Local Offline — localhost:1234)",
             "base_url": "http://localhost:1234/v1",
-            "default_model": "",
-            "needs_key": "false",
-        },
-        "llamacpp": {
-            "label": "llama.cpp / LocalAI (Local Offline — localhost:8080)",
-            "base_url": "http://localhost:8080/v1",
             "default_model": "",
             "needs_key": "false",
         },
@@ -103,8 +135,410 @@ class LocalLLMManager:
         "google/gemma-2-27b-it",
     ]
 
+    # --- Managed llama.cpp + Qwen GGUF In-App Engine ---
+
     @classmethod
-    def check_ollama_status(cls) -> Dict[str, any]:
+    def find_llama_server_binary(cls) -> Optional[str]:
+        """Locates the llama-server binary in Mithrandir app storage or host PATH."""
+        internal_bin = os.path.join(cls.BIN_DIR, "llama-server")
+        if os.path.isfile(internal_bin) and os.access(internal_bin, os.X_OK):
+            return internal_bin
+        system_bin = HostBridge.which("llama-server") or HostBridge.which("llama-cli")
+        if system_bin:
+            return system_bin
+        return None
+
+    @classmethod
+    def get_installed_gguf_models(cls) -> List[str]:
+        """Returns filenames of downloaded .gguf models in Mithrandir storage."""
+        if not os.path.isdir(cls.MODELS_DIR):
+            return []
+        try:
+            files = []
+            for f in sorted(os.listdir(cls.MODELS_DIR)):
+                if f.endswith(".gguf") and not f.endswith(".part"):
+                    full_p = os.path.join(cls.MODELS_DIR, f)
+                    if os.path.isfile(full_p) and os.path.getsize(full_p) > 10 * 1024 * 1024:
+                        files.append(f)
+            return files
+        except Exception:
+            return []
+
+    @classmethod
+    def is_llamacpp_server_running(cls) -> bool:
+        """Checks if the local llama-server instance is responsive on the configured port."""
+        try:
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{cls.LLAMACPP_PORT}/health",
+                headers={"User-Agent": "Mithrandir/0.4.0"}
+            )
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                if resp.status in (200, 503):
+                    return True
+        except Exception:
+            pass
+
+        try:
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{cls.LLAMACPP_PORT}/v1/models",
+                headers={"User-Agent": "Mithrandir/0.4.0"}
+            )
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                if resp.status == 200:
+                    return True
+        except Exception:
+            pass
+
+        return False
+
+    @classmethod
+    def check_llamacpp_status(cls) -> Dict[str, Any]:
+        """Returns full status of the internal llama.cpp engine and downloaded GGUF weights."""
+        engine_bin = cls.find_llama_server_binary()
+        engine_installed = engine_bin is not None
+        installed_models = cls.get_installed_gguf_models()
+        is_running = cls.is_llamacpp_server_running()
+
+        total_bytes = 0
+        if os.path.isdir(cls.APP_DATA_DIR):
+            for root, _dirs, files in os.walk(cls.APP_DATA_DIR):
+                for f in files:
+                    try:
+                        total_bytes += os.path.getsize(os.path.join(root, f))
+                    except Exception:
+                        pass
+
+        default_model = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+        return {
+            "engine_installed": engine_installed,
+            "engine_path": engine_bin or "",
+            "running": is_running,
+            "models": installed_models,
+            "default_model_installed": default_model in installed_models,
+            "disk_usage_mb": round(total_bytes / (1024 * 1024), 1),
+            "port": cls.LLAMACPP_PORT,
+            "base_url": cls.LLAMACPP_BASE_URL,
+            "active_model": cls._active_model or (installed_models[0] if installed_models else default_model),
+        }
+
+    @classmethod
+    def install_llamacpp_engine(
+        cls,
+        line_callback: Optional[Callable[[str], None]] = None,
+        cancel_event: Optional[threading.Event] = None
+    ) -> Tuple[bool, str]:
+        """Downloads and unpacks the official prebuilt llama.cpp binaries for Linux."""
+        os.makedirs(cls.BIN_DIR, mode=0o755, exist_ok=True)
+        if cls.find_llama_server_binary() and os.path.exists(os.path.join(cls.BIN_DIR, "llama-server")):
+            return True, "llama.cpp runtime is already installed."
+
+        if line_callback:
+            line_callback("[Mithrandir] Resolving official llama.cpp Linux release from GitHub...")
+
+        arch = platform.machine().lower()
+        if arch in ("x86_64", "amd64"):
+            asset_suffix = "bin-ubuntu-x64.zip"
+        elif "arm" in arch or "aarch64" in arch:
+            asset_suffix = "bin-ubuntu-arm64.zip"
+        else:
+            asset_suffix = "bin-ubuntu-x64.zip"
+
+        download_url = None
+        try:
+            req = urllib.request.Request(
+                "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest",
+                headers={"User-Agent": "Mithrandir-Linux/0.4.0"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    for asset in data.get("assets", []):
+                        aname = asset.get("name", "")
+                        if aname.endswith(asset_suffix) and "noavx" not in aname:
+                            download_url = asset.get("browser_download_url")
+                            break
+        except Exception as e:
+            if line_callback:
+                line_callback(f"[Mithrandir] Notice: {e}")
+
+        if not download_url:
+            download_url = f"https://github.com/ggml-org/llama.cpp/releases/latest/download/llama-b4000-{asset_suffix}"
+
+        if line_callback:
+            line_callback(f"[Mithrandir] Downloading llama.cpp runtime: {download_url}")
+
+        tmp_zip = os.path.join(cls.APP_DATA_DIR, "llama_tmp.zip")
+        try:
+            req = urllib.request.Request(download_url, headers={"User-Agent": "Mithrandir-Linux/0.4.0"})
+            with urllib.request.urlopen(req, timeout=60) as response:
+                total_size = int(response.headers.get("Content-Length", 0))
+                downloaded = 0
+                while True:
+                    if cancel_event and cancel_event.is_set():
+                        if line_callback:
+                            line_callback("[Mithrandir] Installation cancelled by user.")
+                        if os.path.exists(tmp_zip):
+                            os.remove(tmp_zip)
+                        return False, "Installation cancelled."
+                    chunk = response.read(256 * 1024)
+                    if not chunk:
+                        break
+                    downloaded += len(chunk)
+                    if line_callback and total_size > 0:
+                        pct = (downloaded / total_size) * 100
+                        mb_down = downloaded / (1024 * 1024)
+                        mb_tot = total_size / (1024 * 1024)
+                        line_callback(f"[Mithrandir] Fetching llama.cpp: {mb_down:.1f} MB / {mb_tot:.1f} MB ({pct:.1f}%)")
+
+            if line_callback:
+                line_callback("[Mithrandir] Extracting binaries and libraries to internal storage...")
+
+            with zipfile.ZipFile(tmp_zip, "r") as zf:
+                zf.extractall(cls.BIN_DIR)
+
+            for root, _dirs, files in os.walk(cls.BIN_DIR):
+                for f in files:
+                    fp = os.path.join(root, f)
+                    try:
+                        st = os.stat(fp)
+                        os.chmod(fp, st.st_mode | 0o755)
+                    except Exception:
+                        pass
+
+            if os.path.exists(tmp_zip):
+                os.remove(tmp_zip)
+
+            found_server = cls.find_llama_server_binary()
+            if found_server:
+                if line_callback:
+                    line_callback(f"[Mithrandir] ✓ llama.cpp installed successfully at {found_server}")
+                return True, "llama.cpp installed successfully."
+            return False, "Extraction completed but llama-server binary was not found."
+
+        except Exception as e:
+            if os.path.exists(tmp_zip):
+                try:
+                    os.remove(tmp_zip)
+                except Exception:
+                    pass
+            return False, f"Failed to install llama.cpp: {e}"
+
+    @classmethod
+    def download_gguf_model(
+        cls,
+        model_id: str,
+        line_callback: Optional[Callable[[str], None]] = None,
+        cancel_event: Optional[threading.Event] = None
+    ) -> Tuple[bool, str]:
+        """Downloads a Qwen GGUF model directly from Hugging Face into internal storage."""
+        os.makedirs(cls.MODELS_DIR, mode=0o755, exist_ok=True)
+        dest_file = os.path.join(cls.MODELS_DIR, model_id)
+        if os.path.isfile(dest_file) and os.path.getsize(dest_file) > 10 * 1024 * 1024:
+            return True, f"Model '{model_id}' is already downloaded."
+
+        target_meta = None
+        for m in RECOMMENDED_QWEN_GGUF_MODELS:
+            if m["id"] == model_id:
+                target_meta = m
+                break
+
+        if not target_meta:
+            target_meta = RECOMMENDED_QWEN_GGUF_MODELS[0]
+            model_id = target_meta["id"]
+            dest_file = os.path.join(cls.MODELS_DIR, model_id)
+
+        model_url = target_meta["url"]
+        part_file = dest_file + ".part"
+
+        if line_callback:
+            line_callback(f"[Mithrandir] Connecting to Hugging Face for {target_meta['name']}...")
+            line_callback(f"[Mithrandir] URL: {model_url}")
+
+        try:
+            req = urllib.request.Request(model_url, headers={"User-Agent": "Mithrandir-Linux/0.4.0"})
+            with urllib.request.urlopen(req, timeout=60) as response:
+                total_bytes = int(response.headers.get("Content-Length", 0))
+                downloaded = 0
+                last_report_pct = -1
+
+                with open(part_file, "wb") as f_out:
+                    while True:
+                        if cancel_event and cancel_event.is_set():
+                            if line_callback:
+                                line_callback("[Mithrandir] Download cancelled by user.")
+                            if os.path.exists(part_file):
+                                os.remove(part_file)
+                            return False, "Download cancelled."
+
+                        chunk = response.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        f_out.write(chunk)
+                        downloaded += len(chunk)
+
+                        if total_bytes > 0:
+                            pct = int((downloaded / total_bytes) * 100)
+                            if pct != last_report_pct and (pct % 5 == 0 or downloaded == total_bytes):
+                                last_report_pct = pct
+                                mb_down = downloaded / (1024 * 1024)
+                                mb_tot = total_bytes / (1024 * 1024)
+                                if line_callback:
+                                    line_callback(f"[Mithrandir] Downloading {model_id}: {mb_down:.1f} MB / {mb_tot:.1f} MB ({pct}%)")
+
+            if os.path.exists(dest_file):
+                os.remove(dest_file)
+            os.rename(part_file, dest_file)
+
+            if line_callback:
+                line_callback(f"[Mithrandir] ✓ Model '{model_id}' downloaded and ready!")
+            return True, f"Model '{model_id}' is ready for offline use."
+
+        except Exception as e:
+            if os.path.exists(part_file):
+                try:
+                    os.remove(part_file)
+                except Exception:
+                    pass
+            return False, f"Failed to download model '{model_id}': {e}"
+
+    @classmethod
+    def install_qwen_with_llamacpp(
+        cls,
+        model_id: str = "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+        line_callback: Optional[Callable[[str], None]] = None,
+        cancel_event: Optional[threading.Event] = None
+    ) -> Tuple[bool, str]:
+        """All-in-one setup: installs llama.cpp and downloads Qwen model weights."""
+        if not cls.find_llama_server_binary():
+            if line_callback:
+                line_callback("[Mithrandir] Step 1 of 2: Installing llama.cpp inference engine...")
+            ok_engine, msg_engine = cls.install_llamacpp_engine(line_callback, cancel_event)
+            if not ok_engine:
+                return False, msg_engine
+
+        if line_callback:
+            line_callback(f"[Mithrandir] Step 2 of 2: Downloading Qwen Mini-LLM weights ({model_id})...")
+        ok_model, msg_model = cls.download_gguf_model(model_id, line_callback, cancel_event)
+        if not ok_model:
+            return False, msg_model
+
+        if line_callback:
+            line_callback("[Mithrandir] Starting embedded llama.cpp server with Qwen 2.5...")
+        ok_start, _ = cls.start_llamacpp_server(model_id)
+        if ok_start and line_callback:
+            line_callback("[Mithrandir] ✓ Qwen 2.5 Mini-LLM is active and ready inside Mithrandir!")
+        return True, "Qwen 2.5 Mini-LLM and llama.cpp runtime installed successfully."
+
+    @classmethod
+    def start_llamacpp_server(cls, model_id: Optional[str] = None) -> Tuple[bool, str]:
+        """Starts the managed in-app llama-server process serving the selected GGUF model."""
+        with cls._llama_proc_lock:
+            if cls.is_llamacpp_server_running():
+                return True, f"llama.cpp is already running on {cls.LLAMACPP_BASE_URL}."
+
+            server_bin = cls.find_llama_server_binary()
+            if not server_bin:
+                return False, "llama-server binary is not installed yet. Click 'Install Qwen + llama.cpp' first."
+
+            installed = cls.get_installed_gguf_models()
+            if not installed:
+                return False, "No GGUF models downloaded yet. Click 'Install Qwen + llama.cpp' first."
+
+            target_model = model_id if (model_id and model_id in installed) else installed[0]
+            model_path = os.path.join(cls.MODELS_DIR, target_model)
+            if not os.path.isfile(model_path):
+                return False, f"Model file not found at {model_path}."
+
+            if cls._llama_proc:
+                try:
+                    cls._llama_proc.terminate()
+                    cls._llama_proc.wait(timeout=2)
+                except Exception:
+                    pass
+                cls._llama_proc = None
+
+            env = os.environ.copy()
+            ld_path = cls.BIN_DIR
+            if "LD_LIBRARY_PATH" in env:
+                ld_path = f"{ld_path}:{env['LD_LIBRARY_PATH']}"
+            env["LD_LIBRARY_PATH"] = ld_path
+
+            cmd = [
+                server_bin,
+                "-m", model_path,
+                "--host", "127.0.0.1",
+                "--port", str(cls.LLAMACPP_PORT),
+                "-c", "2048",
+            ]
+
+            try:
+                cls._llama_proc = subprocess.Popen(
+                    cmd,
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+                cls._active_model = target_model
+            except Exception as e:
+                return False, f"Failed to start llama-server process: {e}"
+
+        for _ in range(20):
+            time.sleep(0.5)
+            if cls.is_llamacpp_server_running():
+                return True, f"llama.cpp server started successfully on http://127.0.0.1:{cls.LLAMACPP_PORT}/v1."
+
+        return False, "llama-server started but did not respond on port 18080 within 10s."
+
+    @classmethod
+    def stop_llamacpp_server(cls) -> Tuple[bool, str]:
+        """Gracefully terminates the in-app llama-server process."""
+        with cls._llama_proc_lock:
+            if cls._llama_proc:
+                try:
+                    cls._llama_proc.terminate()
+                    cls._llama_proc.wait(timeout=3)
+                except Exception:
+                    try:
+                        cls._llama_proc.kill()
+                    except Exception:
+                        pass
+                cls._llama_proc = None
+            cls._active_model = None
+
+        try:
+            HostBridge.run_command(["fuser", "-k", f"{cls.LLAMACPP_PORT}/tcp"], timeout=2)
+        except Exception:
+            pass
+
+        return True, "llama.cpp server stopped."
+
+    @classmethod
+    def uninstall_llamacpp_and_models(cls, remove_engine: bool = True, remove_models: bool = True) -> Tuple[bool, str]:
+        """Removes downloaded model weights and/or llama.cpp binaries from internal storage."""
+        cls.stop_llamacpp_server()
+
+        freed_msg = []
+        if remove_models and os.path.isdir(cls.MODELS_DIR):
+            try:
+                shutil.rmtree(cls.MODELS_DIR)
+                freed_msg.append("model weights removed")
+            except Exception as e:
+                return False, f"Could not remove models: {e}"
+
+        if remove_engine and os.path.isdir(cls.BIN_DIR):
+            try:
+                shutil.rmtree(cls.BIN_DIR)
+                freed_msg.append("llama.cpp engine removed")
+            except Exception as e:
+                return False, f"Could not remove engine: {e}"
+
+        return True, f"Uninstalled successfully ({', '.join(freed_msg) if freed_msg else 'storage cleaned'})."
+
+    # --- Ollama Support (Optional External Runtime) ---
+
+    @classmethod
+    def check_ollama_status(cls) -> Dict[str, Any]:
         """Checks if Ollama is installed and whether its local server is running."""
         has_binary = HostBridge.which("ollama") is not None
         is_running = False

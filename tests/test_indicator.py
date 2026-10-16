@@ -80,5 +80,45 @@ class TestIndicatorService(unittest.TestCase):
         self.service.stop()
         self.assertFalse(self.service.is_active)
 
+    def test_smart_boost_truthy_return_value_runs_strictly_once(self):
+        """
+        Verify that even if the smart boost callback returns a non-empty truthy dict,
+        _run_once ensures GLib.idle_add does NOT repeatedly call it in an infinite loop.
+        """
+        calls = []
+
+        def boost_callback():
+            calls.append(1)
+            return {"success": True, "ram_reclaimed_mb": 150.0, "disk_freed_mb": 50.0}
+
+        self.service.on_smart_boost_callback = boost_callback
+        self.service._dispatch_menu_action(2)
+
+        # Run main loop for 150ms to allow any idle loops to run multiple times if buggy
+        loop = GLib.MainLoop()
+        GLib.timeout_add(150, loop.quit)
+        loop.run()
+
+        self.assertEqual(len(calls), 1)
+
+    def test_smart_boost_debounce(self):
+        """Verify that rapid duplicate clicks on Smart Boost within 1s are debounced."""
+        calls = []
+
+        def boost_callback():
+            calls.append(1)
+
+        self.service.on_smart_boost_callback = boost_callback
+        # First click
+        self.service._dispatch_menu_action(2)
+        # Immediate second click
+        self.service._dispatch_menu_action(2)
+
+        loop = GLib.MainLoop()
+        GLib.timeout_add(50, loop.quit)
+        loop.run()
+
+        self.assertEqual(len(calls), 1)
+
 if __name__ == '__main__':
     unittest.main()

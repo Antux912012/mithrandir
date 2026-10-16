@@ -8,7 +8,7 @@ from ..backend.diagnostics import DiagnosticCollector
 from ..backend.host_bridge import HostBridge
 from ..ai.client import AIClient
 from ..ai.safety import SafetyGuard
-from ..ai.local_llm import LocalLLMManager, RECOMMENDED_MINI_MODELS
+from ..ai.local_llm import LocalLLMManager, RECOMMENDED_MINI_MODELS, RECOMMENDED_QWEN_GGUF_MODELS
 from .preferences_dialog import AISettingsStore
 
 
@@ -16,13 +16,14 @@ class AIPage(Gtk.ScrolledWindow):
     """
     AI Diagnosis & Generic Linux Task Assistant page.
     Supports:
-    - OpenAI-compatible Cloud APIs (NVIDIA NIM, OpenAI, OpenRouter) with API Key & Model Selection
-    - Local Offline LLMs (Ollama, LM Studio, llama.cpp) with 1-click Mini-LLM downloader
-    - Built-in Zero-Dependency Offline Linux Mini-Assistant
+    - Built-in Zero-Dependency Offline Linux Mini-Assistant (zero download)
+    - Optional In-App Mini-LLM (Qwen 2.5 GGUF + llama.cpp running directly inside Mithrandir)
+    - External Offline LLMs (Ollama, LM Studio)
+    - OpenAI-compatible Cloud APIs (NVIDIA NIM, OpenAI, OpenRouter)
     - Interactive Generic Linux Task prompt + Safe Fix Execution
     """
 
-    PROVIDER_KEYS = ["builtin", "ollama", "lmstudio", "llamacpp", "nim", "openai"]
+    PROVIDER_KEYS = ["builtin", "llamacpp", "ollama", "lmstudio", "nim", "openai"]
 
     def __init__(self, toast_overlay: Adw.ToastOverlay, settings: Gio.Settings):
         super().__init__()
@@ -49,7 +50,7 @@ class AIPage(Gtk.ScrolledWindow):
         # 2. Local Offline Mini-LLM Manager Card
         self._build_offline_llm_group()
 
-        # 3. Embedded Terminal Console for Ollama / Model Downloads
+        # 3. Embedded Terminal Console for Downloads & Engine Logs
         self._build_terminal_revealer()
 
         # 4. System Diagnostics & Generic Linux Task Card
@@ -80,24 +81,24 @@ class AIPage(Gtk.ScrolledWindow):
         conn_group = Adw.PreferencesGroup()
         conn_group.set_title("AI Provider &amp; Model Selection")
         conn_group.set_description(
-            "Connect to NVIDIA NIM, OpenAI, Local Offline LLMs (Ollama, LM Studio), or the Built-in Offline Linux Mini-Assistant."
+            "Select the Built-in Zero-Download Assistant, In-App Qwen Mini-LLM, External Ollama/LM Studio, or NVIDIA NIM / OpenAI."
         )
 
         # Provider Preset Dropdown
         provider_labels = [LocalLLMManager.PROVIDER_PRESETS[k]["label"] for k in self.PROVIDER_KEYS]
         self.provider_combo = Adw.ComboRow(title="AI Service / Mode")
         self.provider_combo.set_model(Gtk.StringList.new(provider_labels))
-        cur_prov = AISettingsStore.get_str(self.settings, "ai-provider", "ollama")
+        cur_prov = AISettingsStore.get_str(self.settings, "ai-provider", "builtin")
         if cur_prov in self.PROVIDER_KEYS:
             self.provider_combo.set_selected(self.PROVIDER_KEYS.index(cur_prov))
         else:
-            self.provider_combo.set_selected(1)
+            self.provider_combo.set_selected(0)
         self.provider_combo.connect("notify::selected", self._on_provider_combo_changed)
         conn_group.add(self.provider_combo)
 
         # Endpoint URL EntryRow + Test/Fetch Button
         self.url_row = Adw.EntryRow(title="Endpoint Base URL")
-        self.url_row.set_text(AISettingsStore.get_str(self.settings, "ai-base-url", "http://localhost:11434/v1"))
+        self.url_row.set_text(AISettingsStore.get_str(self.settings, "ai-base-url", "builtin://linux-mini"))
         self.url_row.connect("changed", self._on_url_entry_changed)
 
         self.test_btn = Gtk.Button(label="Fetch Models")
@@ -132,14 +133,73 @@ class AIPage(Gtk.ScrolledWindow):
 
     def _build_offline_llm_group(self):
         self.offline_group = Adw.PreferencesGroup()
-        self.offline_group.set_title("Built-in &amp; Offline Mini-LLM Manager")
+        self.offline_group.set_title("Optional In-App Mini-LLM (Qwen 2.5 + llama.cpp)")
         hw_rec = LocalLLMManager.get_hardware_recommendation()
-        self.offline_group.set_description(hw_rec["summary"])
+        self.offline_group.set_description(
+            "Mithrandir ships without bundled neural weights to stay lightweight. "
+            "You can optionally install Qwen 2.5 (1.5B GGUF) and llama.cpp to run directly inside Mithrandir, or remove it anytime."
+        )
 
-        # Ollama Status Row
+        # 1. Main In-App llama.cpp Engine ActionRow
+        self.llama_status_row = Adw.ActionRow(title="Mithrandir In-App Mini-LLM (llama.cpp)")
+        self.llama_status_row.set_subtitle("Checking internal runtime status...")
+        self.llama_status_row.add_prefix(Gtk.Image.new_from_icon_name("system-run-symbolic"))
+
+        llama_btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        llama_btn_box.set_valign(Gtk.Align.CENTER)
+
+        self.install_qwen_btn = Gtk.Button(label="Install Qwen + llama.cpp")
+        self.install_qwen_btn.add_css_class("suggested-action")
+        self.install_qwen_btn.connect("clicked", lambda _b: self._on_install_qwen_llamacpp_clicked())
+        llama_btn_box.append(self.install_qwen_btn)
+
+        self.start_llama_btn = Gtk.Button(label="Start Engine")
+        self.start_llama_btn.connect("clicked", self._on_start_llama_clicked)
+        llama_btn_box.append(self.start_llama_btn)
+
+        self.stop_llama_btn = Gtk.Button(label="Stop Engine")
+        self.stop_llama_btn.connect("clicked", self._on_stop_llama_clicked)
+        llama_btn_box.append(self.stop_llama_btn)
+
+        self.uninstall_llama_btn = Gtk.Button(label="Remove / Free Space")
+        self.uninstall_llama_btn.add_css_class("flat")
+        self.uninstall_llama_btn.connect("clicked", self._on_uninstall_llama_clicked)
+        llama_btn_box.append(self.uninstall_llama_btn)
+
+        self.llama_status_row.add_suffix(llama_btn_box)
+        self.offline_group.add(self.llama_status_row)
+
+        # 2. Curated Qwen GGUF Models Expander
+        self.mini_models_expander = Adw.ExpanderRow()
+        self.mini_models_expander.set_title("In-App Qwen 2.5 GGUF Model Options (0.5B – 1.5B)")
+        self.mini_models_expander.set_subtitle("Lightweight quantized models executed directly on CPU inside Mithrandir")
+        self.mini_models_expander.add_prefix(Gtk.Image.new_from_icon_name("folder-download-symbolic"))
+
+        self.qwen_model_rows = {}
+        for m_info in RECOMMENDED_QWEN_GGUF_MODELS:
+            m_row = Adw.ActionRow()
+            m_row.set_title(GLib.markup_escape_text(f"{m_info['name']}"))
+            m_row.set_subtitle(
+                GLib.markup_escape_text(f"File: {m_info['id']} • Size: {m_info['size']} • Min: {m_info['ram_required']} — {m_info['description']}")
+            )
+
+            btn = Gtk.Button(label="Download & Use")
+            btn.set_valign(Gtk.Align.CENTER)
+            btn.connect("clicked", lambda _b, mid=m_info["id"]: self._on_download_gguf_model_clicked(mid))
+            m_row.add_suffix(btn)
+            self.qwen_model_rows[m_info["id"]] = (m_row, btn)
+            self.mini_models_expander.add_row(m_row)
+
+        self.offline_group.add(self.mini_models_expander)
+
+        # 3. External Ollama Runtime (Optional Expander)
+        self.ollama_expander = Adw.ExpanderRow()
+        self.ollama_expander.set_title("External Ollama Runtime (Optional)")
+        self.ollama_expander.set_subtitle("Connect to a system-wide Ollama daemon on localhost:11434 if installed")
+        self.ollama_expander.add_prefix(Gtk.Image.new_from_icon_name("computer-symbolic"))
+
         self.ollama_status_row = Adw.ActionRow(title="Local Ollama AI Engine")
-        self.ollama_status_row.set_subtitle("Checking local offline runtime...")
-        self.ollama_status_row.add_prefix(Gtk.Image.new_from_icon_name("computer-symbolic"))
+        self.ollama_status_row.set_subtitle("Checking system status...")
 
         ollama_btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         ollama_btn_box.set_valign(Gtk.Align.CENTER)
@@ -149,33 +209,13 @@ class AIPage(Gtk.ScrolledWindow):
         ollama_btn_box.append(self.start_ollama_btn)
 
         self.install_ollama_btn = Gtk.Button(label="Install Ollama")
-        self.install_ollama_btn.add_css_class("suggested-action")
         self.install_ollama_btn.connect("clicked", self._on_install_ollama_clicked)
         ollama_btn_box.append(self.install_ollama_btn)
 
         self.ollama_status_row.add_suffix(ollama_btn_box)
-        self.offline_group.add(self.ollama_status_row)
+        self.ollama_expander.add_row(self.ollama_status_row)
+        self.offline_group.add(self.ollama_expander)
 
-        # Expander with Recommended Mini-LLMs for Linux
-        self.mini_models_expander = Adw.ExpanderRow()
-        self.mini_models_expander.set_title("Download Curated Offline Mini-LLMs for Linux (1B – 3B)")
-        self.mini_models_expander.set_subtitle("Lightweight CPU-friendly models that run 100% offline on Linux laptops &amp; desktops")
-        self.mini_models_expander.add_prefix(Gtk.Image.new_from_icon_name("folder-download-symbolic"))
-
-        for m_info in RECOMMENDED_MINI_MODELS:
-            m_row = Adw.ActionRow()
-            m_row.set_title(GLib.markup_escape_text(f"{m_info['name']} [{m_info['id']}]"))
-            m_row.set_subtitle(
-                GLib.markup_escape_text(f"Size: {m_info['size']} • Min: {m_info['ram_required']} — {m_info['description']}")
-            )
-
-            pull_btn = Gtk.Button(label="Download & Use")
-            pull_btn.set_valign(Gtk.Align.CENTER)
-            pull_btn.connect("clicked", lambda _b, mid=m_info["id"]: self._on_pull_mini_model_clicked(mid))
-            m_row.add_suffix(pull_btn)
-            self.mini_models_expander.add_row(m_row)
-
-        self.offline_group.add(self.mini_models_expander)
         self.box.append(self.offline_group)
 
     def _build_terminal_revealer(self):
@@ -325,14 +365,16 @@ class AIPage(Gtk.ScrolledWindow):
         models = []
         if base_url.startswith("builtin://"):
             models = ["builtin-linux-mini"]
+        elif "18080" in base_url:
+            models = LocalLLMManager.get_installed_gguf_models() or [m["id"] for m in RECOMMENDED_QWEN_GGUF_MODELS]
         elif "integrate.api.nvidia.com" in base_url:
             models = list(LocalLLMManager.NIM_POPULAR_MODELS)
         elif "11434" in base_url:
-            models = ["qwen2.5:1.5b", "qwen2.5-coder:1.5b", "llama3.2:1b", "smollm2:1.7b", "llama3.2:3b"]
+            models = ["qwen2.5:1.5b", "qwen2.5-coder:1.5b", "llama3.2:1b", "smollm2:1.7b"]
         if saved_model and saved_model not in models:
             models.insert(0, saved_model)
         if not models:
-            models = ["local-model"]
+            models = ["qwen2.5-1.5b-instruct-q4_k_m.gguf"]
 
         target = saved_model if saved_model else models[0]
         self._set_model_combo_items(models, target)
@@ -355,7 +397,7 @@ class AIPage(Gtk.ScrolledWindow):
         if self._updating_ui:
             return
         self._updating_ui = True
-        url = AISettingsStore.get_str(self.settings, "ai-base-url", "http://localhost:11434/v1")
+        url = AISettingsStore.get_str(self.settings, "ai-base-url", "builtin://linux-mini")
         model = AISettingsStore.get_str(self.settings, "ai-model", "")
         key = AISettingsStore.get_str(self.settings, "ai-api-key", "")
         self.url_row.set_text(url)
@@ -386,8 +428,15 @@ class AIPage(Gtk.ScrolledWindow):
             return
         url = entry.get_text().strip()
         AISettingsStore.set_str(self.settings, "ai-base-url", url)
-        # Auto-populate NIM curated models if user pasted NVIDIA NIM URL
-        if "integrate.api.nvidia.com" in url and "meta/llama-3.1-70b-instruct" not in self._available_models:
+        if "18080" in url:
+            gguf_models = LocalLLMManager.get_installed_gguf_models() or [m["id"] for m in RECOMMENDED_QWEN_GGUF_MODELS]
+            cur = self.model_entry.get_text().strip() or gguf_models[0]
+            self._set_model_combo_items(gguf_models, cur)
+            self._updating_ui = True
+            self.model_entry.set_text(cur)
+            self._updating_ui = False
+            AISettingsStore.set_str(self.settings, "ai-model", cur)
+        elif "integrate.api.nvidia.com" in url and "meta/llama-3.1-70b-instruct" not in self._available_models:
             cur = self.model_entry.get_text().strip() or "meta/llama-3.1-70b-instruct"
             self._set_model_combo_items(list(LocalLLMManager.NIM_POPULAR_MODELS), cur)
             self._updating_ui = True
@@ -469,43 +518,243 @@ class AIPage(Gtk.ScrolledWindow):
 
     # --- Offline Mini-LLM Management ---
 
+    # --- Offline Mini-LLM Management ---
+
     def _refresh_offline_status(self):
         def worker():
-            st = LocalLLMManager.check_ollama_status()
-            GLib.idle_add(self._update_offline_ui, st)
+            llama_st = LocalLLMManager.check_llamacpp_status()
+            ollama_st = LocalLLMManager.check_ollama_status()
+            GLib.idle_add(self._update_offline_ui, llama_st, ollama_st)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _update_offline_ui(self, st: dict):
-        installed = st.get("installed", False)
-        running = st.get("running", False)
-        models = st.get("models", [])
+    def _update_offline_ui(self, llama_st: dict, ollama_st: dict) -> bool:
+        # 1. Update in-app llama.cpp engine status
+        engine_installed = llama_st.get("engine_installed", False)
+        default_model_installed = llama_st.get("default_model_installed", False)
+        llama_running = llama_st.get("running", False)
+        llama_models = llama_st.get("models", [])
+        disk_mb = llama_st.get("disk_usage_mb", 0.0)
 
-        if installed and running:
-            models_str = f"Local models: {', '.join(models[:4])}" if models else "No models pulled yet — expand below to download a Mini-LLM"
-            self.ollama_status_row.set_subtitle(GLib.markup_escape_text(f"Running on http://localhost:11434/v1 • {models_str}"))
+        if llama_running:
+            self.llama_status_row.set_subtitle(
+                GLib.markup_escape_text(f"Running inside Mithrandir on localhost:18080 • Model: {llama_st.get('active_model')} ({disk_mb} MB disk)")
+            )
+            self.install_qwen_btn.set_visible(False)
+            self.start_llama_btn.set_visible(False)
+            self.stop_llama_btn.set_visible(True)
+            self.uninstall_llama_btn.set_visible(True)
+        elif engine_installed and default_model_installed:
+            self.llama_status_row.set_subtitle(
+                GLib.markup_escape_text(f"Installed & Ready ({disk_mb} MB disk). Click 'Start Engine' or ask a query to run.")
+            )
+            self.install_qwen_btn.set_visible(False)
+            self.start_llama_btn.set_visible(True)
+            self.stop_llama_btn.set_visible(False)
+            self.uninstall_llama_btn.set_visible(True)
+        elif engine_installed and not default_model_installed:
+            self.llama_status_row.set_subtitle(
+                "llama.cpp is installed, but Qwen model weights are missing. Click 'Install Qwen + llama.cpp'."
+            )
+            self.install_qwen_btn.set_visible(True)
+            self.start_llama_btn.set_visible(False)
+            self.stop_llama_btn.set_visible(False)
+            self.uninstall_llama_btn.set_visible(True)
+        else:
+            self.llama_status_row.set_subtitle(
+                "Not installed (App ships without LLM weights). Click 'Install Qwen + llama.cpp' (~986 MB) to enable in-app offline AI."
+            )
+            self.install_qwen_btn.set_visible(True)
+            self.start_llama_btn.set_visible(False)
+            self.stop_llama_btn.set_visible(False)
+            self.uninstall_llama_btn.set_visible(disk_mb > 0)
+
+        # Update Qwen GGUF model items in expander
+        for mid, (row, btn) in getattr(self, "qwen_model_rows", {}).items():
+            if mid in llama_models:
+                if llama_running and llama_st.get("active_model") == mid:
+                    btn.set_label("Active ✓")
+                    btn.set_sensitive(False)
+                else:
+                    btn.set_label("Switch to Model")
+                    btn.set_sensitive(True)
+            else:
+                btn.set_label("Download & Use")
+                btn.set_sensitive(True)
+
+        if llama_models and "18080" in self.url_row.get_text():
+            cur = self.model_entry.get_text().strip()
+            target = cur if cur in llama_models else llama_models[0]
+            self._set_model_combo_items(llama_models, target)
+
+        # 2. Update external Ollama status
+        o_installed = ollama_st.get("installed", False)
+        o_running = ollama_st.get("running", False)
+        o_models = ollama_st.get("models", [])
+
+        if o_installed and o_running:
+            models_str = f"Models: {', '.join(o_models[:3])}" if o_models else "No models pulled"
+            self.ollama_status_row.set_subtitle(GLib.markup_escape_text(f"Running on localhost:11434 • {models_str}"))
             self.start_ollama_btn.set_visible(False)
             self.install_ollama_btn.set_visible(False)
-            if models and "11434" in self.url_row.get_text():
-                cur = self.model_entry.get_text().strip()
-                target = cur if cur in models else models[0]
-                self._set_model_combo_items(models, target)
-        elif installed and not running:
-            self.ollama_status_row.set_subtitle("Ollama is installed but service is stopped. Click 'Start Server' to enable offline AI.")
+        elif o_installed and not o_running:
+            self.ollama_status_row.set_subtitle("Ollama daemon is stopped. Click 'Start Server' to launch.")
             self.start_ollama_btn.set_visible(True)
             self.install_ollama_btn.set_visible(False)
         else:
-            self.ollama_status_row.set_subtitle(
-                "Ollama not installed (Built-in Zero-Config Assistant is still available offline). Click 'Install Ollama' for neural Mini-LLMs."
-            )
+            self.ollama_status_row.set_subtitle("Ollama is not installed on this system.")
             self.start_ollama_btn.set_visible(False)
             self.install_ollama_btn.set_visible(True)
+
+        return False
 
     def _append_terminal_line(self, line: str):
         end_iter = self.terminal_buffer.get_end_iter()
         self.terminal_buffer.insert(end_iter, line + "\n")
         mark = self.terminal_buffer.create_mark(None, self.terminal_buffer.get_end_iter(), False)
         self.terminal_view.scroll_to_mark(mark, 0.05, True, 0.0, 1.0)
+        return False
+
+    def _on_install_qwen_llamacpp_clicked(self):
+        if self.is_busy_terminal:
+            return
+        self.is_busy_terminal = True
+        self.install_qwen_btn.set_sensitive(False)
+        self.terminal_buffer.set_text("")
+        self.terminal_revealer.set_reveal_child(True)
+        self.terminal_spinner.set_visible(True)
+        self.terminal_spinner.start()
+
+        def worker():
+            def line_cb(line: str):
+                GLib.idle_add(self._append_terminal_line, line)
+
+            ok, msg = LocalLLMManager.install_qwen_with_llamacpp(line_callback=line_cb)
+
+            def done():
+                self.is_busy_terminal = False
+                self.install_qwen_btn.set_sensitive(True)
+                self.terminal_spinner.stop()
+                self.terminal_spinner.set_visible(False)
+                self.toast_overlay.add_toast(Adw.Toast.new(msg))
+                if ok:
+                    self._updating_ui = True
+                    self.provider_combo.set_selected(self.PROVIDER_KEYS.index("llamacpp"))
+                    self.url_row.set_text("http://127.0.0.1:18080/v1")
+                    self.model_entry.set_text("qwen2.5-1.5b-instruct-q4_k_m.gguf")
+                    self._updating_ui = False
+                    AISettingsStore.set_str(self.settings, "ai-provider", "llamacpp")
+                    AISettingsStore.set_str(self.settings, "ai-base-url", "http://127.0.0.1:18080/v1")
+                    AISettingsStore.set_str(self.settings, "ai-model", "qwen2.5-1.5b-instruct-q4_k_m.gguf")
+                self._refresh_offline_status()
+                return False
+
+            GLib.idle_add(done)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_start_llama_clicked(self, _btn):
+        self.start_llama_btn.set_sensitive(False)
+
+        def worker():
+            target_model = self.model_entry.get_text().strip() or "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+            ok, msg = LocalLLMManager.start_llamacpp_server(target_model)
+            def done():
+                self.start_llama_btn.set_sensitive(True)
+                self.toast_overlay.add_toast(Adw.Toast.new(msg))
+                self._refresh_offline_status()
+                return False
+            GLib.idle_add(done)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_stop_llama_clicked(self, _btn):
+        self.stop_llama_btn.set_sensitive(False)
+
+        def worker():
+            ok, msg = LocalLLMManager.stop_llamacpp_server()
+            def done():
+                self.stop_llama_btn.set_sensitive(True)
+                self.toast_overlay.add_toast(Adw.Toast.new(msg))
+                self._refresh_offline_status()
+                return False
+            GLib.idle_add(done)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_uninstall_llama_clicked(self, _btn):
+        dialog = Adw.AlertDialog.new(
+            "Uninstall Qwen Mini-LLM & llama.cpp?",
+            "This will delete the in-app llama.cpp inference engine and all downloaded Qwen GGUF model weights from your system, freeing disk space."
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("uninstall", "Uninstall & Free Space")
+        dialog.set_response_appearance("uninstall", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.choose(self.get_root(), None, self._on_uninstall_llama_dialog_response)
+
+    def _on_uninstall_llama_dialog_response(self, dialog, result):
+        response = dialog.choose_finish(result)
+        if response == "uninstall":
+            def worker():
+                ok, msg = LocalLLMManager.uninstall_llamacpp_and_models(remove_engine=True, remove_models=True)
+                def done():
+                    self.toast_overlay.add_toast(Adw.Toast.new(msg))
+                    self._updating_ui = True
+                    self.provider_combo.set_selected(self.PROVIDER_KEYS.index("builtin"))
+                    self.url_row.set_text("builtin://linux-mini")
+                    self.model_entry.set_text("builtin-linux-mini")
+                    self._updating_ui = False
+                    AISettingsStore.set_str(self.settings, "ai-provider", "builtin")
+                    AISettingsStore.set_str(self.settings, "ai-base-url", "builtin://linux-mini")
+                    AISettingsStore.set_str(self.settings, "ai-model", "builtin-linux-mini")
+                    self._refresh_offline_status()
+                    return False
+                GLib.idle_add(done)
+
+            threading.Thread(target=worker, daemon=True).start()
+
+    def _on_download_gguf_model_clicked(self, model_id: str):
+        if self.is_busy_terminal:
+            return
+        self.is_busy_terminal = True
+        self.terminal_buffer.set_text("")
+        self.terminal_revealer.set_reveal_child(True)
+        self.terminal_spinner.set_visible(True)
+        self.terminal_spinner.start()
+
+        def worker():
+            def line_cb(line: str):
+                GLib.idle_add(self._append_terminal_line, line)
+
+            # Ensure llama.cpp engine is installed first
+            if not LocalLLMManager.find_llama_server_binary():
+                LocalLLMManager.install_llamacpp_engine(line_callback=line_cb)
+
+            ok, msg = LocalLLMManager.download_gguf_model(model_id, line_callback=line_cb)
+            if ok:
+                LocalLLMManager.stop_llamacpp_server()
+                LocalLLMManager.start_llamacpp_server(model_id)
+
+            def done():
+                self.is_busy_terminal = False
+                self.terminal_spinner.stop()
+                self.terminal_spinner.set_visible(False)
+                self.toast_overlay.add_toast(Adw.Toast.new(msg))
+                if ok:
+                    self._updating_ui = True
+                    self.provider_combo.set_selected(self.PROVIDER_KEYS.index("llamacpp"))
+                    self.url_row.set_text("http://127.0.0.1:18080/v1")
+                    self.model_entry.set_text(model_id)
+                    self._updating_ui = False
+                    AISettingsStore.set_str(self.settings, "ai-provider", "llamacpp")
+                    AISettingsStore.set_str(self.settings, "ai-base-url", "http://127.0.0.1:18080/v1")
+                    AISettingsStore.set_str(self.settings, "ai-model", model_id)
+                self._refresh_offline_status()
+                return False
+
+            GLib.idle_add(done)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _on_start_ollama_clicked(self, _btn):
         self.start_ollama_btn.set_sensitive(False)
@@ -516,6 +765,7 @@ class AIPage(Gtk.ScrolledWindow):
                 self.start_ollama_btn.set_sensitive(True)
                 self.toast_overlay.add_toast(Adw.Toast.new(msg))
                 self._refresh_offline_status()
+                return False
             GLib.idle_add(done)
 
         threading.Thread(target=worker, daemon=True).start()
@@ -543,6 +793,7 @@ class AIPage(Gtk.ScrolledWindow):
                 self.terminal_spinner.set_visible(False)
                 self.toast_overlay.add_toast(Adw.Toast.new(msg))
                 self._refresh_offline_status()
+                return False
 
             GLib.idle_add(done)
 
@@ -569,7 +820,6 @@ class AIPage(Gtk.ScrolledWindow):
                 self.terminal_spinner.set_visible(False)
                 self.toast_overlay.add_toast(Adw.Toast.new(msg))
                 if ok:
-                    # Automatically switch to Ollama and select the newly downloaded mini-LLM
                     self._updating_ui = True
                     self.provider_combo.set_selected(self.PROVIDER_KEYS.index("ollama"))
                     self.url_row.set_text("http://localhost:11434/v1")
@@ -579,6 +829,7 @@ class AIPage(Gtk.ScrolledWindow):
                     AISettingsStore.set_str(self.settings, "ai-base-url", "http://localhost:11434/v1")
                     AISettingsStore.set_str(self.settings, "ai-model", model_id)
                 self._refresh_offline_status()
+                return False
 
             GLib.idle_add(done)
 

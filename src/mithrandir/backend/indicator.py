@@ -1,3 +1,4 @@
+import time
 import logging
 import gi
 gi.require_version('Gio', '2.0')
@@ -121,6 +122,7 @@ class IndicatorService:
         self.on_navigate_callback = None
         self.on_preferences_callback = None
         self.on_quit_callback = None
+        self._last_boost_click_time = 0.0
 
         # Introspection structures
         self.sni_node = Gio.DBusNodeInfo.new_for_xml(SNI_XML)
@@ -286,10 +288,19 @@ class IndicatorService:
         }
         return props.get(prop_name)
 
+    @staticmethod
+    def _run_once(callback, *args) -> bool:
+        """Helper to ensure a callback scheduled via GLib.idle_add runs strictly once."""
+        try:
+            callback(*args)
+        except Exception as e:
+            logger.error(f"Indicator callback error: {e}")
+        return GLib.SOURCE_REMOVE
+
     def _handle_sni_method(self, conn, sender, path, iface, method, params, invocation):
         if method in ("Activate", "SecondaryActivate"):
             if self.on_activate_callback:
-                GLib.idle_add(self.on_activate_callback)
+                GLib.idle_add(self._run_once, self.on_activate_callback)
         invocation.return_value(None)
 
     # DBusMenu Callbacks
@@ -335,24 +346,36 @@ class IndicatorService:
                 self._dispatch_menu_action(item_id)
             invocation.return_value(None)
 
+        elif method == "EventGroup":
+            (events,) = params.unpack()
+            for item_id, event_type, _data, _timestamp in events:
+                if event_type == "clicked":
+                    self._dispatch_menu_action(item_id)
+            invocation.return_value(GLib.Variant("(ai)", ([],)))
+
         else:
             invocation.return_value(None)
 
     def _dispatch_menu_action(self, item_id: int):
+        now = time.monotonic()
         if item_id == 1:  # Open Mithrandir (Dashboard)
             if self.on_navigate_callback:
-                GLib.idle_add(self.on_navigate_callback, "dashboard")
+                GLib.idle_add(self._run_once, self.on_navigate_callback, "dashboard")
             elif self.on_activate_callback:
-                GLib.idle_add(self.on_activate_callback)
+                GLib.idle_add(self._run_once, self.on_activate_callback)
         elif item_id == 2:  # Smart Boost
+            if (now - self._last_boost_click_time) < 1.0:
+                logger.debug("Debouncing duplicate Smart Boost click event from DBusMenu.")
+                return
+            self._last_boost_click_time = now
             if self.on_smart_boost_callback:
-                GLib.idle_add(self.on_smart_boost_callback)
+                GLib.idle_add(self._run_once, self.on_smart_boost_callback)
         elif item_id == 4:  # Cleaner
             if self.on_navigate_callback:
-                GLib.idle_add(self.on_navigate_callback, "cleaner")
+                GLib.idle_add(self._run_once, self.on_navigate_callback, "cleaner")
         elif item_id == 5:  # Preferences
             if self.on_preferences_callback:
-                GLib.idle_add(self.on_preferences_callback)
+                GLib.idle_add(self._run_once, self.on_preferences_callback)
         elif item_id == 7:  # Quit
             if self.on_quit_callback:
-                GLib.idle_add(self.on_quit_callback)
+                GLib.idle_add(self._run_once, self.on_quit_callback)

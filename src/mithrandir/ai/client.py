@@ -32,6 +32,8 @@ class AIClient:
 
         # Auto-append /v1 for known roots when omitted
         if cleaned in (
+            "http://localhost:18080",
+            "http://127.0.0.1:18080",
             "http://localhost:11434",
             "http://127.0.0.1:11434",
             "http://localhost:1234",
@@ -68,6 +70,29 @@ class AIClient:
                 "message": "Built-in Offline Linux Mini-Assistant is active.",
             }
 
+        if "18080" in self.base_url:
+            st = LocalLLMManager.check_llamacpp_status()
+            if not st["engine_installed"]:
+                return {
+                    "success": False,
+                    "models": [],
+                    "error": "Mithrandir In-App llama.cpp engine is not installed yet. Click 'Install Qwen + llama.cpp' in AI Diagnostics.",
+                }
+            if not st["models"]:
+                return {
+                    "success": False,
+                    "models": [],
+                    "error": "No Qwen GGUF models downloaded yet. Click 'Install Qwen + llama.cpp' to download weights (~986 MB).",
+                }
+            if not st["running"]:
+                ok_start, _ = LocalLLMManager.start_llamacpp_server(self.default_model)
+                if not ok_start:
+                    return {
+                        "success": False,
+                        "models": st["models"],
+                        "error": "Failed to auto-start in-app llama.cpp server. Click 'Start Engine' in AI Diagnostics.",
+                    }
+
         url = f"{self.base_url}/models"
         req = urllib.request.Request(url, headers=self._build_headers())
         try:
@@ -76,7 +101,9 @@ class AIClient:
                     raw = response.read().decode("utf-8", errors="ignore")
                     data = json.loads(raw)
                     models = self._extract_models_from_payload(data)
-                    if not models and ("11434" in self.base_url):
+                    if not models and ("18080" in self.base_url):
+                        models = LocalLLMManager.get_installed_gguf_models()
+                    elif not models and ("11434" in self.base_url):
                         models = LocalLLMManager.check_ollama_status().get("models", [])
                     if "integrate.api.nvidia.com" in self.base_url:
                         models = self._prioritize_nim_models(models)
@@ -97,6 +124,25 @@ class AIClient:
                 }
             return {"success": False, "models": [], "error": f"HTTP {e.code}: {err_detail}"}
         except urllib.error.URLError as e:
+            if "18080" in self.base_url:
+                st = LocalLLMManager.check_llamacpp_status()
+                if not st["engine_installed"]:
+                    return {
+                        "success": False,
+                        "models": [],
+                        "error": "In-app llama.cpp is not installed yet. Click 'Install Qwen + llama.cpp'.",
+                    }
+                if not st["models"]:
+                    return {
+                        "success": False,
+                        "models": [],
+                        "error": "No Qwen GGUF models found. Click 'Install Qwen + llama.cpp'.",
+                    }
+                return {
+                    "success": False,
+                    "models": st["models"],
+                    "error": "In-app llama-server is not running. Click 'Start Engine' to launch.",
+                }
             # Check Ollama fallback if port 11434
             if "11434" in self.base_url:
                 st = LocalLLMManager.check_ollama_status()
@@ -190,6 +236,12 @@ class AIClient:
         if chosen:
             return chosen
 
+        if "18080" in self.base_url:
+            installed = LocalLLMManager.get_installed_gguf_models()
+            if installed:
+                return installed[0]
+            return "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+
         # Try discovering available models from endpoint
         discovered = self.list_models()
         if discovered:
@@ -217,6 +269,11 @@ class AIClient:
         if self.base_url.startswith("builtin://") or target_model == "builtin-linux-mini":
             content = BuiltinLinuxAssistant.respond(messages)
             return {"success": True, "content": content, "model": "builtin-linux-mini"}
+
+        if "18080" in self.base_url and not LocalLLMManager.is_llamacpp_server_running():
+            ok_start, start_msg = LocalLLMManager.start_llamacpp_server(target_model)
+            if not ok_start:
+                return {"success": False, "error": f"Failed to start in-app llama.cpp: {start_msg}"}
 
         url = f"{self.base_url}/chat/completions"
         payload = {

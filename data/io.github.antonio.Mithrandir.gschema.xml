@@ -14,11 +14,11 @@
       <summary>Window maximized</summary>
     </key>
     <key name="ai-provider" type="s">
-      <default>'local'</default>
-      <summary>AI provider type ('builtin', 'ollama', 'lmstudio', 'llamacpp', 'nim', 'openai', or 'custom')</summary>
+      <default>'builtin'</default>
+      <summary>AI provider type ('builtin', 'llamacpp', 'ollama', 'lmstudio', 'nim', 'openai', or 'custom')</summary>
     </key>
     <key name="ai-base-url" type="s">
-      <default>'http://localhost:11434/v1'</default>
+      <default>'builtin://linux-mini'</default>
       <summary>Base URL for the AI API endpoint</summary>
     </key>
     <key name="ai-api-key" type="s">
@@ -26,7 +26,7 @@
       <summary>API Key for OpenAI-compatible services (e.g. NVIDIA NIM, OpenAI, OpenRouter)</summary>
     </key>
     <key name="ai-model" type="s">
-      <default>''</default>
+      <default>'builtin-linux-mini'</default>
       <summary>Selected AI model ID</summary>
     </key>
     <key name="ai-privacy-mask-pii" type="b">

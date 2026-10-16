@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 from typing import Dict, Any
 from .host_bridge import HostBridge
 from .monitor import SystemMonitor
@@ -15,6 +16,9 @@ class SmartBoostEngine:
 
     _temp_cache_time: float = 0.0
     _temp_cache_val: tuple[int, int] = (0, 0)
+    _boost_lock: threading.Lock = threading.Lock()
+    _is_boosting: bool = False
+    _last_auto_boost_time: float = 0.0
 
     @classmethod
     def get_temporary_files_size(cls, force_refresh: bool = False) -> tuple[int, int]:
@@ -97,53 +101,70 @@ class SmartBoostEngine:
         1. Empties temporary files & thumbnails
         2. Flushes filesystem buffers and drops kernel file caches/buffers if permitted
         """
-        mem_before = SystemMonitor.get_memory_info()
-        used_before = mem_before.get('used_mb', 0.0)
+        with cls._boost_lock:
+            if cls._is_boosting:
+                mem_cur = SystemMonitor.get_memory_info()
+                return {
+                    'success': False,
+                    'already_running': True,
+                    'ram_reclaimed_mb': 0.0,
+                    'disk_freed_mb': 0.0,
+                    'current_ram_percent': mem_cur.get('percent', 0.0)
+                }
+            cls._is_boosting = True
 
-        temp_bytes_before, _ = cls.get_temporary_files_size(force_refresh=True)
+        try:
+            mem_before = SystemMonitor.get_memory_info()
+            used_before = mem_before.get('used_mb', 0.0)
 
-        # 1. Clean temp & thumbnails
-        if clean_temp:
-            CleanerEngine.clean_item('thumbnails')
-            try:
-                uid = os.getuid()
-                for root, _dirs, files in os.walk('/tmp'):
-                    for f in files:
-                        fp = os.path.join(root, f)
-                        try:
-                            st = os.lstat(fp)
-                            if st.st_uid == uid and not os.path.islink(fp):
-                                os.remove(fp)
-                        except OSError:
-                            pass
-            except Exception:
-                pass
+            temp_bytes_before, _ = cls.get_temporary_files_size(force_refresh=True)
 
-        # 2. Release inactive memory cache & buffers
-        if drop_caches:
-            HostBridge.run_command(['sync'], timeout=5)
-            # Attempt non-interactive sudo -n first, or direct write if running with privileges
-            HostBridge.run_command(
-                ['sh', '-c', 'sudo -n sh -c "echo 3 > /proc/sys/vm/drop_caches && echo 1 > /proc/sys/vm/compact_memory" 2>/dev/null || (echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true)'],
-                use_pkexec=False,
-                timeout=5
-            )
+            # 1. Clean temp & thumbnails
+            if clean_temp:
+                CleanerEngine.clean_item('thumbnails')
+                try:
+                    uid = os.getuid()
+                    for root, _dirs, files in os.walk('/tmp'):
+                        for f in files:
+                            fp = os.path.join(root, f)
+                            try:
+                                st = os.lstat(fp)
+                                if st.st_uid == uid and not os.path.islink(fp):
+                                    os.remove(fp)
+                            except OSError:
+                                pass
+                except Exception:
+                    pass
 
-        time.sleep(0.2)
-        mem_after = SystemMonitor.get_memory_info()
-        used_after = mem_after.get('used_mb', 0.0)
+            # 2. Release inactive memory cache & buffers
+            if drop_caches:
+                HostBridge.run_command(['sync'], timeout=5)
+                # Attempt non-interactive sudo -n first, or direct write if running with privileges
+                HostBridge.run_command(
+                    ['sh', '-c', 'sudo -n sh -c "echo 3 > /proc/sys/vm/drop_caches && echo 1 > /proc/sys/vm/compact_memory" 2>/dev/null || (echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true)'],
+                    use_pkexec=False,
+                    timeout=5
+                )
 
-        temp_bytes_after, _ = cls.get_temporary_files_size(force_refresh=True)
+            time.sleep(0.2)
+            mem_after = SystemMonitor.get_memory_info()
+            used_after = mem_after.get('used_mb', 0.0)
 
-        ram_reclaimed = max(0.0, round(used_before - used_after, 1))
-        disk_freed_mb = max(0.0, round((temp_bytes_before - temp_bytes_after) / (1024 * 1024), 1))
+            temp_bytes_after, _ = cls.get_temporary_files_size(force_refresh=True)
 
-        return {
-            'success': True,
-            'ram_reclaimed_mb': ram_reclaimed,
-            'disk_freed_mb': disk_freed_mb,
-            'current_ram_percent': mem_after.get('percent', 0.0)
-        }
+            ram_reclaimed = max(0.0, round(used_before - used_after, 1))
+            disk_freed_mb = max(0.0, round((temp_bytes_before - temp_bytes_after) / (1024 * 1024), 1))
+
+            return {
+                'success': True,
+                'already_running': False,
+                'ram_reclaimed_mb': ram_reclaimed,
+                'disk_freed_mb': disk_freed_mb,
+                'current_ram_percent': mem_after.get('percent', 0.0)
+            }
+        finally:
+            with cls._boost_lock:
+                cls._is_boosting = False
 
     @classmethod
     def evaluate_auto_boost(cls, settings) -> tuple[bool, Dict[str, Any]]:
@@ -152,6 +173,7 @@ class SmartBoostEngine:
         - smart-boost-enabled (bool)
         - smart-boost-ram-threshold (int %)
         - smart-boost-temp-threshold-mb (int MB)
+        - smart-boost-interval-min (int minutes, cooldown)
         """
         try:
             enabled = settings.get_boolean('smart-boost-enabled')
@@ -159,6 +181,15 @@ class SmartBoostEngine:
             enabled = True
 
         if not enabled:
+            return False, {}
+
+        try:
+            interval_min = max(5, settings.get_int('smart-boost-interval-min'))
+        except Exception:
+            interval_min = 15
+
+        now = time.time()
+        if (now - cls._last_auto_boost_time) < (interval_min * 60):
             return False, {}
 
         try:
@@ -175,7 +206,10 @@ class SmartBoostEngine:
         should_boost = (status['ram_percent'] >= ram_threshold) or (status['temp_size_mb'] >= temp_threshold)
 
         if should_boost:
+            cls._last_auto_boost_time = now
             result = cls.execute_boost()
+            if not result.get('success', False):
+                return False, {}
             return True, {
                 'ram_reclaimed_mb': result['ram_reclaimed_mb'],
                 'disk_freed_mb': result['disk_freed_mb'],

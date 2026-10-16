@@ -1,4 +1,5 @@
 import sys
+import threading
 import gi
 
 gi.require_version('Gtk', '4.0')
@@ -24,6 +25,7 @@ class MithrandirApplication(Adw.Application):
         self.window = None
         self.indicator = None
         self._is_held = False
+        self._boost_in_progress = False
 
     def _sync_hold_state(self, keep_bg: bool):
         """Keeps the application process alive when minimized to background."""
@@ -123,6 +125,11 @@ class MithrandirApplication(Adw.Application):
     def do_shutdown(self):
         if self.indicator:
             self.indicator.stop()
+        try:
+            from .ai.local_llm import LocalLLMManager
+            LocalLLMManager.stop_llamacpp_server()
+        except Exception:
+            pass
         if self._is_held:
             self.release()
             self._is_held = False
@@ -152,11 +159,31 @@ class MithrandirApplication(Adw.Application):
             self.window = MithrandirWindow(application=self)
         self.window.navigate_to_page(page_tag)
 
-    def perform_smart_boost_with_notification(self):
+    def perform_smart_boost_with_notification(self) -> bool:
         """
-        Executes Smart Boost and dispatches a native GNOME notification.
+        Executes Smart Boost asynchronously in a background thread and dispatches
+        a native GNOME notification upon completion. Explicitly returns False
+        so that when called via GLib.idle_add, GLib removes the source immediately.
         """
-        res = SmartBoostEngine.execute_boost(clean_temp=True, drop_caches=True)
+        if getattr(self, '_boost_in_progress', False):
+            return False
+        self._boost_in_progress = True
+
+        def worker():
+            try:
+                res = SmartBoostEngine.execute_boost(clean_temp=True, drop_caches=True)
+                GLib.idle_add(self._on_smart_boost_finished, res)
+            except Exception:
+                self._boost_in_progress = False
+
+        threading.Thread(target=worker, daemon=True).start()
+        return False
+
+    def _on_smart_boost_finished(self, res: dict) -> bool:
+        self._boost_in_progress = False
+        if res.get('already_running', False):
+            return False
+
         ram_freed = res.get('ram_reclaimed_mb', 0.0)
         disk_freed = res.get('disk_freed_mb', 0.0)
 
@@ -179,7 +206,7 @@ class MithrandirApplication(Adw.Application):
         if self.window and hasattr(self.window, 'dashboard_page') and hasattr(self.window.dashboard_page, '_update_metrics'):
             self.window.dashboard_page._update_metrics()
 
-        return res
+        return False
 
     def _update_indicator_status(self):
         if self.indicator and self.indicator.is_active:
@@ -192,9 +219,23 @@ class MithrandirApplication(Adw.Application):
     def _on_smart_boost_interval(self) -> bool:
         if not self.settings:
             return True
+
+        def worker():
+            try:
+                triggered, info = SmartBoostEngine.evaluate_auto_boost(self.settings)
+                if triggered:
+                    GLib.idle_add(self._on_auto_boost_triggered, info)
+                else:
+                    GLib.idle_add(self._update_indicator_status)
+            except Exception:
+                pass
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def _on_auto_boost_triggered(self, info: dict) -> bool:
         try:
-            triggered, info = SmartBoostEngine.evaluate_auto_boost(self.settings)
-            if triggered and self.settings.get_boolean('smart-boost-notify'):
+            if self.settings and self.settings.get_boolean('smart-boost-notify'):
                 notification = Gio.Notification.new('Mithrandir Smart Boost')
                 notification.set_body(
                     f"Performance optimized: Freed {info.get('ram_reclaimed_mb', 0):.1f} MB RAM and {info.get('disk_freed_mb', 0):.1f} MB clutter."
@@ -202,9 +243,11 @@ class MithrandirApplication(Adw.Application):
                 notification.set_icon(Gio.ThemedIcon.new('io.github.antonio.Mithrandir'))
                 self.send_notification('smart-boost-trigger', notification)
             self._update_indicator_status()
+            if self.window and hasattr(self.window, 'dashboard_page') and hasattr(self.window.dashboard_page, '_update_metrics'):
+                self.window.dashboard_page._update_metrics()
         except Exception:
             pass
-        return True
+        return False
 
     def _on_preferences(self, _action, _param):
         win = self.window or self.props.active_window

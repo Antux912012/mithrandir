@@ -79,7 +79,7 @@ class PreferencesDialog(Adw.PreferencesDialog):
     and AI Diagnostics endpoint, API key, and model selection settings.
     """
 
-    PROVIDER_KEYS = ["builtin", "ollama", "lmstudio", "llamacpp", "nim", "openai"]
+    PROVIDER_KEYS = ["builtin", "llamacpp", "ollama", "lmstudio", "nim", "openai"]
 
     def __init__(self, settings: Gio.Settings):
         super().__init__()
@@ -181,18 +181,18 @@ class PreferencesDialog(Adw.PreferencesDialog):
         provider_labels = [LocalLLMManager.PROVIDER_PRESETS[k]["label"] for k in self.PROVIDER_KEYS]
         self.provider_combo = Adw.ComboRow(title="AI Provider Preset")
         self.provider_combo.set_model(Gtk.StringList.new(provider_labels))
-        current_provider = AISettingsStore.get_str(self.settings, "ai-provider", "ollama")
+        current_provider = AISettingsStore.get_str(self.settings, "ai-provider", "builtin")
         if current_provider in self.PROVIDER_KEYS:
             self.provider_combo.set_selected(self.PROVIDER_KEYS.index(current_provider))
         else:
-            self.provider_combo.set_selected(1)
+            self.provider_combo.set_selected(0)
         self.provider_combo.connect("notify::selected", self._on_provider_changed)
         ai_group.add(self.provider_combo)
 
         # Base URL Row
         self.url_row = Adw.EntryRow()
         self.url_row.set_title("API Base URL")
-        self.url_row.set_text(AISettingsStore.get_str(self.settings, "ai-base-url", "http://localhost:11434/v1"))
+        self.url_row.set_text(AISettingsStore.get_str(self.settings, "ai-base-url", "builtin://linux-mini"))
         self.url_row.connect("changed", self._on_url_changed)
         ai_group.add(self.url_row)
 
@@ -241,16 +241,16 @@ class PreferencesDialog(Adw.PreferencesDialog):
         models = []
         if base_url.startswith("builtin://"):
             models = ["builtin-linux-mini"]
+        elif "18080" in base_url:
+            models = LocalLLMManager.get_installed_gguf_models() or ["qwen2.5-1.5b-instruct-q4_k_m.gguf"]
         elif "integrate.api.nvidia.com" in base_url:
             models = list(LocalLLMManager.NIM_POPULAR_MODELS)
         elif "11434" in base_url:
-            models = [m["id"] for m in LocalLLMManager.check_ollama_status().get("models", []) if isinstance(m, dict)] or \
-                     LocalLLMManager.check_ollama_status().get("models", []) or \
-                     ["qwen2.5:1.5b", "qwen2.5-coder:1.5b", "llama3.2:1b", "smollm2:1.7b"]
+            models = ["qwen2.5:1.5b", "qwen2.5-coder:1.5b", "llama3.2:1b", "smollm2:1.7b"]
         if saved_model and saved_model not in models:
             models.insert(0, saved_model)
         if not models:
-            models = ["local-model"]
+            models = ["builtin-linux-mini"]
         self._set_model_combo_items(models, saved_model or models[0])
 
     def _set_model_combo_items(self, models: list[str], selected_model: str):
