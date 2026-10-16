@@ -10,6 +10,7 @@ pkg-deb/
 
 # Flatpak artifacts
 .flatpak-builder/
+repo/
 
 # Python cache & bytecode
 __pycache__/

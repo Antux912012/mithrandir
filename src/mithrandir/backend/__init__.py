@@ -6,6 +6,7 @@ from .diagnostics import DiagnosticCollector
 from .services import ServiceManager, ServiceInfo
 from .packages import PackageManager, PackageItem
 from .antivirus_clamav import ClamAVEngine, ThreatFinding, QuarantineVault, DefinitionsStatus, ScanReport
+from .indicator import IndicatorService
 
 __all__ = [
     'HostBridge',
@@ -22,5 +23,6 @@ __all__ = [
     'ThreatFinding',
     'QuarantineVault',
     'DefinitionsStatus',
-    'ScanReport'
+    'ScanReport',
+    'IndicatorService'
 ]

@@ -116,11 +116,11 @@ class BtrfsPage(Gtk.ScrolledWindow):
         self.list_group.set_description(f"Found {len(snapshots)} snapshots")
         for s in snapshots:
             row = Adw.ActionRow()
-            row.set_title(s['name'])
+            row.set_title(GLib.markup_escape_text(s['name']))
             sub = f"ID: {s['id']} • Path: {s['path']}"
             if 'date' in s:
                 sub = f"{s['date']} • {sub}"
-            row.set_subtitle(sub)
+            row.set_subtitle(GLib.markup_escape_text(sub))
 
             icon = Gtk.Image.new_from_icon_name("drive-harddisk-symbolic")
             row.add_prefix(icon)

@@ -1,8 +1,9 @@
 import os
 import signal
 import pwd
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from .host_bridge import HostBridge
+
 
 class ProcessManager:
     """
@@ -14,9 +15,20 @@ class ProcessManager:
     def list_processes(cls) -> List[Dict[str, Any]]:
         """
         Lists all system processes with details.
-        In Flatpak (or without psutil), queries host processes via `ps` to access the host PID namespace.
-        Outside Flatpak, uses psutil if available, with `ps` and /proc as fallbacks.
+        Queries host processes via `ps` for accurate instantaneous CPU % and host PID namespace,
+        with `psutil` and direct `/proc` inspection as fallbacks.
         """
+        # 1. Fast host process listing via ps (provides accurate %cpu and works across Flatpak & native)
+        code, out, _ = HostBridge.run_command(
+            ['ps', '-eo', 'pid:10,user:20,%cpu:8,%mem:8,rss:12,stat:8,comm:30,args', '--no-headers'],
+            timeout=8
+        )
+        if code == 0 and out.strip():
+            procs = cls._parse_host_ps(out)
+            if procs:
+                return procs
+
+        # 2. Fallback to psutil outside Flatpak
         if not HostBridge.is_flatpak():
             try:
                 import psutil
@@ -38,19 +50,13 @@ class ProcessManager:
                         })
                     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                         pass
-                return procs
+                if procs:
+                    return procs
             except ImportError:
                 pass
 
-        # Fast host process listing via ps
-        code, out, _ = HostBridge.run_command(
-            ['ps', '-eo', 'pid:10,user:20,%cpu:8,%mem:8,rss:12,stat:8,comm:30,args', '--no-headers'],
-            timeout=8
-        )
-        if code == 0 and out.strip():
-            procs = cls._parse_host_ps(out)
-            if procs:
-                return procs
+        # 3. Final fallback: direct /proc parsing
+        return cls._parse_proc_fallback()
 
     @classmethod
     def _parse_host_ps(cls, out: str) -> List[Dict[str, Any]]:
@@ -94,7 +100,8 @@ class ProcessManager:
                     continue
         return procs
 
-        # Final fallback: direct /proc parsing
+    @classmethod
+    def _parse_proc_fallback(cls) -> List[Dict[str, Any]]:
         total_mem_kb = 1
         meminfo = HostBridge.read_host_file('/proc/meminfo')
         if meminfo:
@@ -193,4 +200,3 @@ class ProcessManager:
             return True, f"Process {pid} has already ended."
         except Exception as e:
             return False, str(e)
-

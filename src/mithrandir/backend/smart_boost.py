@@ -1,11 +1,10 @@
 import os
-import shutil
-import glob
 import time
 from typing import Dict, Any
 from .host_bridge import HostBridge
 from .monitor import SystemMonitor
 from .cleaner import CleanerEngine
+
 
 class SmartBoostEngine:
     """
@@ -14,15 +13,21 @@ class SmartBoostEngine:
     and automated performance boost with customizable thresholds.
     """
 
+    _temp_cache_time: float = 0.0
+    _temp_cache_val: tuple[int, int] = (0, 0)
+
     @classmethod
-    def get_temporary_files_size(cls) -> tuple[int, int]:
+    def get_temporary_files_size(cls, force_refresh: bool = False) -> tuple[int, int]:
         """
         Calculates total size (bytes) and file count of cleanable temporary clutter:
         - Thumbnail cache
-        - User cache fragments
-        - Stremio torrent cache (if exists)
         - /tmp user temporary files
+        Caches result for 15 seconds to avoid excessive disk I/O during 3s UI polling.
         """
+        now = time.time()
+        if not force_refresh and (now - cls._temp_cache_time) < 15.0:
+            return cls._temp_cache_val
+
         total_size = 0
         total_count = 0
 
@@ -36,7 +41,7 @@ class SmartBoostEngine:
         try:
             if os.path.exists(tmp_dir):
                 uid = os.getuid()
-                for root, dirs, files in os.walk(tmp_dir):
+                for root, _dirs, files in os.walk(tmp_dir):
                     for f in files:
                         fp = os.path.join(root, f)
                         try:
@@ -49,6 +54,8 @@ class SmartBoostEngine:
         except Exception:
             pass
 
+        cls._temp_cache_time = now
+        cls._temp_cache_val = (total_size, total_count)
         return total_size, total_count
 
     @classmethod
@@ -88,21 +95,19 @@ class SmartBoostEngine:
         """
         Performs PC Manager-style boost:
         1. Empties temporary files & thumbnails
-        2. Drops kernel file caches/buffers to release standby RAM
-        3. Compacts memory
+        2. Flushes filesystem buffers and drops kernel file caches/buffers if permitted
         """
         mem_before = SystemMonitor.get_memory_info()
         used_before = mem_before.get('used_mb', 0.0)
 
-        temp_bytes_before, _ = cls.get_temporary_files_size()
+        temp_bytes_before, _ = cls.get_temporary_files_size(force_refresh=True)
 
         # 1. Clean temp & thumbnails
         if clean_temp:
             CleanerEngine.clean_item('thumbnails')
-            # Clean user temporary files in /tmp
             try:
                 uid = os.getuid()
-                for root, dirs, files in os.walk('/tmp'):
+                for root, _dirs, files in os.walk('/tmp'):
                     for f in files:
                         fp = os.path.join(root, f)
                         try:
@@ -116,17 +121,19 @@ class SmartBoostEngine:
 
         # 2. Release inactive memory cache & buffers
         if drop_caches:
-            # Sync filesystem before dropping cache
-            HostBridge.run_command(['sync'])
-            # Drop clean caches via pkexec
-            HostBridge.run_command(['sh', '-c', 'echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true'], use_pkexec=False)
-            HostBridge.run_command(['sh', '-c', 'echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true'], use_pkexec=False)
+            HostBridge.run_command(['sync'], timeout=5)
+            # Attempt non-interactive sudo -n first, or direct write if running with privileges
+            HostBridge.run_command(
+                ['sh', '-c', 'sudo -n sh -c "echo 3 > /proc/sys/vm/drop_caches && echo 1 > /proc/sys/vm/compact_memory" 2>/dev/null || (echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true)'],
+                use_pkexec=False,
+                timeout=5
+            )
 
-        time.sleep(0.3)
+        time.sleep(0.2)
         mem_after = SystemMonitor.get_memory_info()
         used_after = mem_after.get('used_mb', 0.0)
 
-        temp_bytes_after, _ = cls.get_temporary_files_size()
+        temp_bytes_after, _ = cls.get_temporary_files_size(force_refresh=True)
 
         ram_reclaimed = max(0.0, round(used_before - used_after, 1))
         disk_freed_mb = max(0.0, round((temp_bytes_before - temp_bytes_after) / (1024 * 1024), 1))

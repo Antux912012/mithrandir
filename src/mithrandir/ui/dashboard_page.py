@@ -313,18 +313,42 @@ class DashboardPage(Gtk.ScrolledWindow):
         return row
 
     def _update_metrics(self) -> bool:
+        if getattr(self, '_metrics_busy', False):
+            return True
+        self._metrics_busy = True
+
+        def worker():
+            try:
+                boost_stat = SmartBoostEngine.get_boost_status()
+                cpu_pct = SystemMonitor.get_cpu_percent()
+                mem = SystemMonitor.get_memory_info()
+                disk = SystemMonitor.get_disk_usage('/')
+                temps = SystemMonitor.get_temperatures()
+                bat = SystemMonitor.get_battery_info()
+                net_rates = SystemMonitor.get_network_rates()
+                gpus = SystemMonitor.get_gpu_info()
+                GLib.idle_add(
+                    self._apply_metrics_to_ui,
+                    boost_stat, cpu_pct, mem, disk, temps, bat, net_rates, gpus
+                )
+            except Exception:
+                self._metrics_busy = False
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def _apply_metrics_to_ui(self, boost_stat, cpu_pct, mem, disk, temps, bat, net_rates, gpus):
+        self._metrics_busy = False
+
         # Update Smart Boost Banner
-        boost_stat = SmartBoostEngine.get_boost_status()
         self.lbl_boost_ram.set_text(f"RAM Usage: {boost_stat['ram_percent']:.1f}%")
         self.boost_ram_bar.set_fraction(boost_stat['ram_percent'] / 100.0)
         self.lbl_boost_temp.set_text(f"Temporary Files: {boost_stat['temp_size_str']}")
 
         # CPU
-        cpu_pct = SystemMonitor.get_cpu_percent()
         self.tile_cpu.set_data(f"{cpu_pct}%", cpu_pct / 100.0, "Total Load")
 
         # Memory
-        mem = SystemMonitor.get_memory_info()
         mem_pct = mem.get('percent', 0.0)
         self.tile_mem.set_data(
             f"{mem_pct}%",
@@ -333,7 +357,6 @@ class DashboardPage(Gtk.ScrolledWindow):
         )
 
         # Disk
-        disk = SystemMonitor.get_disk_usage('/')
         disk_pct = disk.get('percent', 0.0)
         self.tile_disk.set_data(
             f"{disk_pct}%",
@@ -342,13 +365,11 @@ class DashboardPage(Gtk.ScrolledWindow):
         )
 
         # Temperature
-        temps = SystemMonitor.get_temperatures()
         cpu_temp = temps.get('cpu_temp', 0.0)
         temp_fraction = cpu_temp / 100.0 if cpu_temp > 0 else 0.0
         self.tile_temp.set_data(f"{cpu_temp}°C", temp_fraction, "CPU Package")
 
         # Battery (Real Capacity vs Maximum Design Capacity in Wh)
-        bat = SystemMonitor.get_battery_info()
         if bat.get('present', False) and bat.get('design_capacity_wh', 0.0) > 0:
             health_pct = bat.get('capacity_percent', 0.0)
             real_wh = bat.get('real_capacity_wh', 0.0)
@@ -371,15 +392,12 @@ class DashboardPage(Gtk.ScrolledWindow):
             self.tile_battery.set_tooltip_text("No battery detected on this system")
 
         # Network Telemetry (Stacer feature)
-        net_rates = SystemMonitor.get_network_rates()
-        # Scale DL/UL against 20 MB/s max for visualization
         dl_frac = min(1.0, net_rates['rx_bytes_sec'] / (20 * 1024 * 1024))
         ul_frac = min(1.0, net_rates['tx_bytes_sec'] / (10 * 1024 * 1024))
         self.tile_net_dl.set_data(net_rates['rx_str'], dl_frac, "Incoming Rate")
         self.tile_net_ul.set_data(net_rates['tx_str'], ul_frac, "Outgoing Rate")
 
         # GPU0 & GPU1
-        gpus = SystemMonitor.get_gpu_info()
         if len(gpus) > 0:
             gpu0 = gpus[0]
             self.tile_gpu0.set_data(
@@ -399,5 +417,4 @@ class DashboardPage(Gtk.ScrolledWindow):
             )
         else:
             self.tile_gpu1.set_data("N/A", 0.0, "Integrated / None")
-
-        return True
+        return False

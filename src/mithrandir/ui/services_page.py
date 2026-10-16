@@ -93,11 +93,11 @@ class ServicesPage(Gtk.ScrolledWindow):
 
         for svc in filtered:
             expander = Adw.ExpanderRow()
-            expander.set_title(svc.name)
+            expander.set_title(GLib.markup_escape_text(svc.name))
 
             # Subtitle with status & critical badge
             crit_badge = "[Essential System Service]" if svc.is_critical else "[Optional / User Service]"
-            expander.set_subtitle(f"Status: {svc.active_state} ({svc.sub_state}) • {crit_badge}")
+            expander.set_subtitle(GLib.markup_escape_text(f"Status: {svc.active_state} ({svc.sub_state}) • {crit_badge}"))
 
             # Icon
             is_active = (svc.active_state == "active")

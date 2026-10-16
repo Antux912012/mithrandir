@@ -285,6 +285,17 @@ class MithrandirWindow(Adw.ApplicationWindow):
             if hasattr(self, 'title_widget'):
                 self.title_widget.set_subtitle(getattr(row, 'page_title', 'Dashboard'))
 
+    def navigate_to_page(self, page_tag: str):
+        """Navigates to the designated page tag and presents the window."""
+        if hasattr(self, 'sidebar_items') and page_tag in self.sidebar_items:
+            row_data = self.sidebar_items[page_tag]
+            self.list_box.select_row(row_data['row'])
+            self.stack.set_visible_child_name(page_tag)
+            if hasattr(self, 'title_widget'):
+                self.title_widget.set_subtitle(getattr(row_data['row'], 'page_title', 'Dashboard'))
+        self.set_visible(True)
+        self.present()
+
     def show_preferences(self):
         dialog = PreferencesDialog(self.settings)
         dialog.present(self)

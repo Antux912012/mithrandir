@@ -127,38 +127,51 @@ class SystemMonitor:
         cpu_temp = round(max(temps), 1) if temps else 0.0
         return {'cpu_temp': cpu_temp}
 
+    _nvidia_available: Optional[bool] = None
+
     @classmethod
     def get_gpu_info(cls) -> List[Dict[str, any]]:
         """
         Detects GPU0 and GPU1 (Intel, AMD, Nvidia) and returns utilization/model info.
+        Avoids blocking on nvidia-smi if the NVIDIA kernel driver is not loaded.
         """
         gpus = []
 
-        # Check Nvidia first via nvidia-smi if available
-        code, out, _ = HostBridge.run_command(
-            ['nvidia-smi', '--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,memory.total', '--format=csv,noheader,nounits'],
-            timeout=3
-        )
-        if code == 0 and out.strip():
-            lines = out.strip().splitlines()
-            for idx, line in enumerate(lines):
-                parts = [p.strip() for p in line.split(',')]
-                if len(parts) >= 3:
-                    name = parts[0]
-                    try:
-                        util = float(parts[1])
-                    except (ValueError, IndexError):
-                        util = 0.0
-                    try:
-                        temp = float(parts[2])
-                    except (ValueError, IndexError):
-                        temp = 0.0
-                    gpus.append({
-                        'id': f'GPU{idx}',
-                        'name': name,
-                        'util_percent': util,
-                        'temp': temp
-                    })
+        # Only invoke nvidia-smi if the NVIDIA kernel module is loaded
+        if cls._nvidia_available is None:
+            cls._nvidia_available = bool(
+                os.path.exists('/proc/driver/nvidia/version')
+                or HostBridge.file_exists('/proc/driver/nvidia/version')
+            ) and (HostBridge.which('nvidia-smi') is not None)
+
+        if cls._nvidia_available:
+            code, out, _ = HostBridge.run_command(
+                ['nvidia-smi', '--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,memory.total', '--format=csv,noheader,nounits'],
+                timeout=2
+            )
+            if code == 0 and out.strip():
+                lines = out.strip().splitlines()
+                for idx, line in enumerate(lines):
+                    parts = [p.strip() for p in line.split(',')]
+                    if len(parts) >= 3:
+                        name = parts[0]
+                        try:
+                            util = float(parts[1])
+                        except (ValueError, IndexError):
+                            util = 0.0
+                        try:
+                            temp = float(parts[2])
+                        except (ValueError, IndexError):
+                            temp = 0.0
+                        gpus.append({
+                            'id': f'GPU{idx}',
+                            'name': name,
+                            'util_percent': util,
+                            'temp': temp
+                        })
+            elif code == -1:
+                # Timed out; disable repeated blocking nvidia-smi queries
+                cls._nvidia_available = False
 
         # Check DRM cards (/sys/class/drm/card0, card1)
         for card_idx in [0, 1]:

@@ -725,8 +725,8 @@ class AntivirusPage(Gtk.ScrolledWindow):
 
         row = Adw.ActionRow()
         badge = "RANSOMWARE" if finding.is_ransomware else "MALWARE"
-        row.set_title(f"[{badge}] {finding.threat_name}")
-        row.set_subtitle(finding.file_path)
+        row.set_title(GLib.markup_escape_text(f"[{badge}] {finding.threat_name}"))
+        row.set_subtitle(GLib.markup_escape_text(finding.file_path))
 
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         btn_box.set_valign(Gtk.Align.CENTER)
@@ -788,8 +788,21 @@ class AntivirusPage(Gtk.ScrolledWindow):
         try:
             if os.path.exists(finding.file_path):
                 os.remove(finding.file_path)
+            else:
+                from ..backend.host_bridge import HostBridge
+                code, _, err = HostBridge.run_command(['rm', '-f', finding.file_path], use_pkexec=True)
+                if code != 0:
+                    raise OSError(err or "Failed to remove file on host")
             self.toast_overlay.add_toast(Adw.Toast.new("Infected file permanently deleted."))
             self.findings_group.remove(row)
+        except PermissionError:
+            from ..backend.host_bridge import HostBridge
+            code, _, err = HostBridge.run_command(['rm', '-f', finding.file_path], use_pkexec=True)
+            if code == 0:
+                self.toast_overlay.add_toast(Adw.Toast.new("Infected file permanently deleted."))
+                self.findings_group.remove(row)
+            else:
+                self.toast_overlay.add_toast(Adw.Toast.new(f"Failed to delete: {err}"))
         except Exception as e:
             self.toast_overlay.add_toast(Adw.Toast.new(f"Failed to delete: {str(e)}"))
 

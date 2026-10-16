@@ -30,6 +30,20 @@
   </branding>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.4.0" date="2026-10-16">
+      <description>
+        <p>Major feature release v0.4.0 with expanded AI integration, offline Mini-LLMs, and performance hardening:</p>
+        <ul>
+          <li>OpenAI-compatible model selection and API key management for NVIDIA NIM, OpenAI, and OpenRouter</li>
+          <li>Built-in zero-dependency Offline Linux Mini-Assistant for instant offline diagnostics and generic Linux tasks</li>
+          <li>Local Offline Mini-LLM Manager supporting Ollama, LM Studio, and llama.cpp with one-click installation and model downloading</li>
+          <li>Interactive Generic Linux Task Assistant with prompt bar and quick task chips</li>
+          <li>Optimized system telemetry collection off the main UI thread to eliminate interface freezing</li>
+          <li>Process manager fixes for CPU percentage accuracy and robust /proc inspection fallback</li>
+          <li>Smart Boost clutter scanning optimizations and Pango markup escaping fixes across all pages</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.5" date="2026-10-13">
       <description>
         <p>Production release v0.3.5 with new official application icon and full asset set:</p>

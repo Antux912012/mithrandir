@@ -15,15 +15,19 @@
     </key>
     <key name="ai-provider" type="s">
       <default>'local'</default>
-      <summary>AI provider type ('local' or 'openai')</summary>
+      <summary>AI provider type ('builtin', 'ollama', 'lmstudio', 'llamacpp', 'nim', 'openai', or 'custom')</summary>
     </key>
     <key name="ai-base-url" type="s">
-      <default>'http://localhost:1234/v1'</default>
+      <default>'http://localhost:11434/v1'</default>
       <summary>Base URL for the AI API endpoint</summary>
+    </key>
+    <key name="ai-api-key" type="s">
+      <default>''</default>
+      <summary>API Key for OpenAI-compatible services (e.g. NVIDIA NIM, OpenAI, OpenRouter)</summary>
     </key>
     <key name="ai-model" type="s">
       <default>''</default>
-      <summary>Selected AI model</summary>
+      <summary>Selected AI model ID</summary>
     </key>
     <key name="ai-privacy-mask-pii" type="b">
       <default>true</default>
@@ -32,6 +36,10 @@
     <key name="keep-in-background" type="b">
       <default>true</default>
       <summary>Whether to keep Mithrandir running in background when window is closed</summary>
+    </key>
+    <key name="show-panel-indicator" type="b">
+      <default>true</default>
+      <summary>Whether to display the Mithrandir applet in the GNOME top bar panel</summary>
     </key>
     <key name="smart-boost-enabled" type="b">
       <default>true</default>

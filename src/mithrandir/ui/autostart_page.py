@@ -86,11 +86,11 @@ class AutostartPage(Gtk.ScrolledWindow):
 
         for e in entries:
             row = Adw.ActionRow()
-            row.set_title(e['name'])
+            row.set_title(GLib.markup_escape_text(e['name']))
             sub = e['command'] if len(e['command']) <= 60 else e['command'][:60] + "..."
             if e['comment']:
                 sub = f"{e['comment']} ({sub})"
-            row.set_subtitle(sub)
+            row.set_subtitle(GLib.markup_escape_text(sub))
 
             # Icon
             icon = Gtk.Image.new_from_icon_name(e.get('icon') or "application-x-executable-symbolic")
