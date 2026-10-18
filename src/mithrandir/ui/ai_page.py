@@ -19,11 +19,11 @@ class AIPage(Gtk.ScrolledWindow):
     - Built-in Zero-Dependency Offline Linux Mini-Assistant (zero download)
     - Optional In-App Mini-LLM (Qwen 2.5 GGUF + llama.cpp running directly inside Mithrandir)
     - External Offline LLMs (Ollama, LM Studio)
-    - OpenAI-compatible Cloud APIs (NVIDIA NIM, OpenAI, OpenRouter)
+    - Cloud AI APIs (Google Gemini via Google AI Studio, Anthropic Claude, NVIDIA NIM, OpenAI, OpenRouter)
     - Interactive Generic Linux Task prompt + Safe Fix Execution
     """
 
-    PROVIDER_KEYS = ["builtin", "llamacpp", "ollama", "lmstudio", "nim", "openai"]
+    PROVIDER_KEYS = ["builtin", "llamacpp", "ollama", "lmstudio", "gemini", "claude", "nim", "openai"]
 
     def __init__(self, toast_overlay: Adw.ToastOverlay, settings: Gio.Settings):
         super().__init__()
@@ -81,7 +81,7 @@ class AIPage(Gtk.ScrolledWindow):
         conn_group = Adw.PreferencesGroup()
         conn_group.set_title("AI Provider &amp; Model Selection")
         conn_group.set_description(
-            "Select the Built-in Zero-Download Assistant, In-App Qwen Mini-LLM, External Ollama/LM Studio, or NVIDIA NIM / OpenAI."
+            "Select the Built-in Zero-Download Assistant, In-App Qwen Mini-LLM, External Ollama/LM Studio, or Cloud AI (Google Gemini, Claude, NVIDIA NIM, OpenAI)."
         )
 
         # Provider Preset Dropdown
@@ -110,7 +110,7 @@ class AIPage(Gtk.ScrolledWindow):
         conn_group.add(self.url_row)
 
         # API Key EntryRow
-        self.key_row = Adw.PasswordEntryRow(title="API Key (Required for NVIDIA NIM / OpenAI, leave empty for Local)")
+        self.key_row = Adw.PasswordEntryRow(title="API Key (Required for Gemini / Claude / OpenAI / NIM, leave empty for Local)")
         self.key_row.set_text(AISettingsStore.get_str(self.settings, "ai-api-key", ""))
         self.key_row.connect("changed", self._on_key_entry_changed)
         conn_group.add(self.key_row)
@@ -367,6 +367,10 @@ class AIPage(Gtk.ScrolledWindow):
             models = ["builtin-linux-mini"]
         elif "18080" in base_url:
             models = LocalLLMManager.get_installed_gguf_models() or [m["id"] for m in RECOMMENDED_QWEN_GGUF_MODELS]
+        elif "generativelanguage.googleapis.com" in base_url:
+            models = list(LocalLLMManager.GEMINI_POPULAR_MODELS)
+        elif "api.anthropic.com" in base_url:
+            models = list(LocalLLMManager.CLAUDE_POPULAR_MODELS)
         elif "integrate.api.nvidia.com" in base_url:
             models = list(LocalLLMManager.NIM_POPULAR_MODELS)
         elif "11434" in base_url:
@@ -432,6 +436,20 @@ class AIPage(Gtk.ScrolledWindow):
             gguf_models = LocalLLMManager.get_installed_gguf_models() or [m["id"] for m in RECOMMENDED_QWEN_GGUF_MODELS]
             cur = self.model_entry.get_text().strip() or gguf_models[0]
             self._set_model_combo_items(gguf_models, cur)
+            self._updating_ui = True
+            self.model_entry.set_text(cur)
+            self._updating_ui = False
+            AISettingsStore.set_str(self.settings, "ai-model", cur)
+        elif "generativelanguage.googleapis.com" in url and "gemini-2.5-flash" not in self._available_models:
+            cur = self.model_entry.get_text().strip() or "gemini-2.5-flash"
+            self._set_model_combo_items(list(LocalLLMManager.GEMINI_POPULAR_MODELS), cur)
+            self._updating_ui = True
+            self.model_entry.set_text(cur)
+            self._updating_ui = False
+            AISettingsStore.set_str(self.settings, "ai-model", cur)
+        elif "api.anthropic.com" in url and "claude-3-5-sonnet-latest" not in self._available_models:
+            cur = self.model_entry.get_text().strip() or "claude-3-5-sonnet-latest"
+            self._set_model_combo_items(list(LocalLLMManager.CLAUDE_POPULAR_MODELS), cur)
             self._updating_ui = True
             self.model_entry.set_text(cur)
             self._updating_ui = False

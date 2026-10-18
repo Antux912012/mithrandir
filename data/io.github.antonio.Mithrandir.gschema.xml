@@ -15,7 +15,7 @@
     </key>
     <key name="ai-provider" type="s">
       <default>'builtin'</default>
-      <summary>AI provider type ('builtin', 'llamacpp', 'ollama', 'lmstudio', 'nim', 'openai', or 'custom')</summary>
+      <summary>AI provider type ('builtin', 'llamacpp', 'ollama', 'lmstudio', 'gemini', 'claude', 'nim', 'openai', or 'custom')</summary>
     </key>
     <key name="ai-base-url" type="s">
       <default>'builtin://linux-mini'</default>
@@ -23,7 +23,7 @@
     </key>
     <key name="ai-api-key" type="s">
       <default>''</default>
-      <summary>API Key for OpenAI-compatible services (e.g. NVIDIA NIM, OpenAI, OpenRouter)</summary>
+      <summary>API Key for Cloud AI services (Google Gemini AI Studio, Anthropic Claude, NVIDIA NIM, OpenAI, OpenRouter)</summary>
     </key>
     <key name="ai-model" type="s">
       <default>'builtin-linux-mini'</default>

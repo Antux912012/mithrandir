@@ -35,6 +35,64 @@ class TestAIIntegration(unittest.TestCase):
         c6 = AIClient(base_url="http://127.0.0.1:18080/v1/chat/completions")
         self.assertEqual(c6.base_url, "http://127.0.0.1:18080/v1")
 
+        c7 = AIClient(base_url="https://generativelanguage.googleapis.com")
+        self.assertEqual(c7.base_url, "https://generativelanguage.googleapis.com/v1beta")
+        self.assertTrue(c7.is_gemini())
+        self.assertTrue(c7.is_gemini_native())
+
+        c8 = AIClient(base_url="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent")
+        self.assertEqual(c8.base_url, "https://generativelanguage.googleapis.com/v1beta")
+
+    def test_gemini_ai_studio_completion_and_models(self):
+        """Ensure Google AI Studio Gemini endpoint formats systemInstruction, contents, and x-goog-api-key header."""
+        client = AIClient(
+            base_url="https://generativelanguage.googleapis.com/v1beta",
+            api_key="AIzaSyTestGoogleAIStudioKey",
+            model="gemini-2.5-flash",
+        )
+        headers = client._build_headers()
+        self.assertEqual(headers.get("x-goog-api-key"), "AIzaSyTestGoogleAIStudioKey")
+        self.assertNotIn("Authorization", headers)
+
+        captured = {}
+
+        def fake_urlopen(req, timeout=60):
+            captured["url"] = req.full_url
+            captured["headers"] = {k.lower(): v for k, v in req.header_items()}
+            captured["body"] = json.loads(req.data.decode("utf-8"))
+            resp = MagicMock()
+            resp.status = 200
+            resp.read.return_value = json.dumps({
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": "Gemini diagnosis ready.\nPROPOSED_COMMAND: journalctl -p 3 -xb"}],
+                            "role": "model",
+                        }
+                    }
+                ]
+            }).encode("utf-8")
+            resp.__enter__.return_value = resp
+            return resp
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            res = client.chat_completion(
+                [
+                    {"role": "system", "content": "You are Mithrandir Linux assistant."},
+                    {"role": "user", "content": "Check system logs"},
+                ]
+            )
+            self.assertTrue(res["success"])
+            self.assertEqual(res["model"], "gemini-2.5-flash")
+            self.assertIn("PROPOSED_COMMAND: journalctl -p 3 -xb", res["content"])
+            self.assertEqual(
+                captured["url"],
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+            )
+            self.assertEqual(captured["headers"].get("x-goog-api-key"), "AIzaSyTestGoogleAIStudioKey")
+            self.assertEqual(captured["body"]["systemInstruction"]["parts"][0]["text"], "You are Mithrandir Linux assistant.")
+            self.assertEqual(captured["body"]["contents"][0]["parts"][0]["text"], "Check system logs")
+
     def test_nim_model_selection_and_headers(self):
         """Ensure NVIDIA NIM API key header and selected model are sent in chat_completion."""
         client = AIClient(
@@ -71,7 +129,7 @@ class TestAIIntegration(unittest.TestCase):
             self.assertEqual(captured_req["url"], "https://integrate.api.nvidia.com/v1/chat/completions")
 
     def test_list_models_extraction(self):
-        """Ensure list_models parses OpenAI /v1/models and Ollama formats."""
+        """Ensure list_models parses OpenAI /v1/models, Google Gemini /v1beta/models, and Ollama formats."""
         payload_openai = {"data": [{"id": "model-alpha"}, {"id": "model-beta"}]}
         extracted = AIClient._extract_models_from_payload(payload_openai)
         self.assertEqual(extracted, ["model-alpha", "model-beta"])
@@ -79,6 +137,15 @@ class TestAIIntegration(unittest.TestCase):
         payload_ollama = {"models": [{"name": "qwen2.5:1.5b"}, {"name": "llama3.2:1b"}]}
         extracted_ollama = AIClient._extract_models_from_payload(payload_ollama)
         self.assertEqual(extracted_ollama, ["qwen2.5:1.5b", "llama3.2:1b"])
+
+        payload_gemini = {
+            "models": [
+                {"name": "models/gemini-2.5-flash", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/text-embedding-004", "supportedGenerationMethods": ["embedContent"]},
+            ]
+        }
+        extracted_gemini = AIClient._extract_models_from_payload(payload_gemini)
+        self.assertEqual(extracted_gemini, ["gemini-2.5-flash"])
 
     def test_builtin_offline_diagnostics(self):
         """Ensure BuiltinLinuxAssistant analyzes system state and proposes a command offline."""

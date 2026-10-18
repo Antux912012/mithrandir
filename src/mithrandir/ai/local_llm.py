@@ -110,6 +110,18 @@ class LocalLLMManager:
             "default_model": "",
             "needs_key": "false",
         },
+        "gemini": {
+            "label": "Google Gemini (Google AI Studio API)",
+            "base_url": "https://generativelanguage.googleapis.com/v1beta",
+            "default_model": "gemini-2.5-flash",
+            "needs_key": "true",
+        },
+        "claude": {
+            "label": "Anthropic Claude (Cloud API)",
+            "base_url": "https://api.anthropic.com/v1",
+            "default_model": "claude-3-5-sonnet-latest",
+            "needs_key": "true",
+        },
         "nim": {
             "label": "NVIDIA NIM (OpenAI-Compatible Cloud API)",
             "base_url": "https://integrate.api.nvidia.com/v1",
@@ -123,6 +135,21 @@ class LocalLLMManager:
             "needs_key": "true",
         },
     }
+
+    GEMINI_POPULAR_MODELS: List[str] = [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+    ]
+
+    CLAUDE_POPULAR_MODELS: List[str] = [
+        "claude-3-7-sonnet-latest",
+        "claude-3-5-sonnet-latest",
+        "claude-3-5-haiku-latest",
+    ]
 
     NIM_POPULAR_MODELS: List[str] = [
         "meta/llama-3.1-70b-instruct",
@@ -170,7 +197,7 @@ class LocalLLMManager:
         try:
             req = urllib.request.Request(
                 f"http://127.0.0.1:{cls.LLAMACPP_PORT}/health",
-                headers={"User-Agent": "Mithrandir/0.4.0"}
+                headers={"User-Agent": "Mithrandir/0.4.1"}
             )
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 if resp.status in (200, 503):
@@ -181,7 +208,7 @@ class LocalLLMManager:
         try:
             req = urllib.request.Request(
                 f"http://127.0.0.1:{cls.LLAMACPP_PORT}/v1/models",
-                headers={"User-Agent": "Mithrandir/0.4.0"}
+                headers={"User-Agent": "Mithrandir/0.4.1"}
             )
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 if resp.status == 200:
@@ -247,7 +274,7 @@ class LocalLLMManager:
         try:
             req = urllib.request.Request(
                 "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest",
-                headers={"User-Agent": "Mithrandir-Linux/0.4.0"}
+                headers={"User-Agent": "Mithrandir-Linux/0.4.1"}
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 if resp.status == 200:
@@ -269,7 +296,7 @@ class LocalLLMManager:
 
         tmp_zip = os.path.join(cls.APP_DATA_DIR, "llama_tmp.zip")
         try:
-            req = urllib.request.Request(download_url, headers={"User-Agent": "Mithrandir-Linux/0.4.0"})
+            req = urllib.request.Request(download_url, headers={"User-Agent": "Mithrandir-Linux/0.4.1"})
             with urllib.request.urlopen(req, timeout=60) as response:
                 total_size = int(response.headers.get("Content-Length", 0))
                 downloaded = 0
@@ -355,7 +382,7 @@ class LocalLLMManager:
             line_callback(f"[Mithrandir] URL: {model_url}")
 
         try:
-            req = urllib.request.Request(model_url, headers={"User-Agent": "Mithrandir-Linux/0.4.0"})
+            req = urllib.request.Request(model_url, headers={"User-Agent": "Mithrandir-Linux/0.4.1"})
             with urllib.request.urlopen(req, timeout=60) as response:
                 total_bytes = int(response.headers.get("Content-Length", 0))
                 downloaded = 0

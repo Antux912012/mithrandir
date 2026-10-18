@@ -7,7 +7,8 @@ from .local_llm import LocalLLMManager, BuiltinLinuxAssistant
 
 class AIClient:
     """
-    OpenAI-compatible client supporting cloud providers (NVIDIA NIM, OpenAI, OpenRouter),
+    AI client supporting Google Gemini (Google AI Studio), Anthropic Claude,
+    OpenAI-compatible cloud providers (NVIDIA NIM, OpenAI, OpenRouter),
     local offline models (Ollama, LM Studio, llama.cpp, LocalAI), and the built-in
     zero-dependency Linux Mini-Assistant.
     """
@@ -25,10 +26,20 @@ class AIClient:
         if url.startswith("builtin://"):
             return url
         cleaned = url.rstrip("/")
-        # Strip accidental endpoint suffixes if user pasted full completions/models URL
-        for suffix in ("/chat/completions", "/completions", "/models"):
+
+        # Strip accidental Gemini :generateContent suffix if user pasted full endpoint
+        if ":generateContent" in cleaned:
+            idx = cleaned.find("/models/")
+            if idx != -1:
+                cleaned = cleaned[:idx].rstrip("/")
+
+        # Strip accidental endpoint suffixes if user pasted full completions/models/messages URL
+        for suffix in ("/chat/completions", "/completions", "/messages", "/models"):
             if cleaned.endswith(suffix):
                 cleaned = cleaned[: -len(suffix)].rstrip("/")
+
+        if cleaned == "https://generativelanguage.googleapis.com":
+            return "https://generativelanguage.googleapis.com/v1beta"
 
         # Auto-append /v1 for known roots when omitted
         if cleaned in (
@@ -42,21 +53,44 @@ class AIClient:
             "http://127.0.0.1:8080",
             "https://integrate.api.nvidia.com",
             "https://api.openai.com",
+            "https://api.anthropic.com",
         ):
             cleaned = f"{cleaned}/v1"
         return cleaned
 
-    def _build_headers(self) -> Dict[str, str]:
-        token = self.api_key or "lm-studio"
-        return {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "Mithrandir/0.3.5 (Linux; GTK4)",
-        }
-
     def is_builtin(self) -> bool:
         return self.base_url.startswith("builtin://") or self.default_model == "builtin-linux-mini"
+
+    def is_gemini_native(self) -> bool:
+        return (
+            "generativelanguage.googleapis.com" in self.base_url
+            and not self.base_url.endswith("/openai")
+        )
+
+    def is_gemini(self) -> bool:
+        return "generativelanguage.googleapis.com" in self.base_url
+
+    def is_claude(self) -> bool:
+        return "api.anthropic.com" in self.base_url
+
+    def _build_headers(self) -> Dict[str, str]:
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "Mithrandir/0.4.1 (Linux; GTK4)",
+        }
+        if self.is_gemini_native():
+            if self.api_key:
+                headers["x-goog-api-key"] = self.api_key
+            return headers
+        if self.is_claude():
+            if self.api_key:
+                headers["x-api-key"] = self.api_key
+            headers["anthropic-version"] = "2023-06-01"
+            return headers
+        token = self.api_key or "lm-studio"
+        headers["Authorization"] = f"Bearer {token}"
+        return headers
 
     def test_connection(self) -> Dict[str, Any]:
         """
@@ -68,6 +102,20 @@ class AIClient:
                 "success": True,
                 "models": ["builtin-linux-mini"],
                 "message": "Built-in Offline Linux Mini-Assistant is active.",
+            }
+
+        if self.is_gemini_native() and not self.api_key:
+            return {
+                "success": False,
+                "models": list(LocalLLMManager.GEMINI_POPULAR_MODELS),
+                "error": "Google AI Studio API Key is required. Get one at aistudio.google.com.",
+            }
+
+        if self.is_claude() and not self.api_key:
+            return {
+                "success": False,
+                "models": list(LocalLLMManager.CLAUDE_POPULAR_MODELS),
+                "error": "Anthropic Claude API Key is required.",
             }
 
         if "18080" in self.base_url:
@@ -107,6 +155,10 @@ class AIClient:
                         models = LocalLLMManager.check_ollama_status().get("models", [])
                     if "integrate.api.nvidia.com" in self.base_url:
                         models = self._prioritize_nim_models(models)
+                    elif self.is_gemini():
+                        models = self._prioritize_gemini_models(models)
+                    elif self.is_claude():
+                        models = self._prioritize_claude_models(models)
                     return {
                         "success": True,
                         "models": models,
@@ -115,12 +167,23 @@ class AIClient:
                 return {"success": False, "models": [], "error": f"HTTP {response.status}"}
         except urllib.error.HTTPError as e:
             err_detail = self._parse_http_error(e)
-            # If NVIDIA NIM /models endpoint is restricted or needs key, still offer curated NIM models if key is present
             if "integrate.api.nvidia.com" in self.base_url and e.code in (401, 403):
                 return {
                     "success": False,
                     "models": list(LocalLLMManager.NIM_POPULAR_MODELS),
                     "error": f"HTTP {e.code} (Check your NVIDIA NIM API Key): {err_detail}",
+                }
+            if self.is_gemini() and e.code in (400, 401, 403):
+                return {
+                    "success": False,
+                    "models": list(LocalLLMManager.GEMINI_POPULAR_MODELS),
+                    "error": f"HTTP {e.code} (Check your Google AI Studio API Key): {err_detail}",
+                }
+            if self.is_claude() and e.code in (400, 401, 403):
+                return {
+                    "success": False,
+                    "models": list(LocalLLMManager.CLAUDE_POPULAR_MODELS),
+                    "error": f"HTTP {e.code} (Check your Anthropic API Key): {err_detail}",
                 }
             return {"success": False, "models": [], "error": f"HTTP {e.code}: {err_detail}"}
         except urllib.error.URLError as e:
@@ -163,6 +226,10 @@ class AIClient:
             return models
         if "integrate.api.nvidia.com" in self.base_url:
             return list(LocalLLMManager.NIM_POPULAR_MODELS)
+        if self.is_gemini():
+            return list(LocalLLMManager.GEMINI_POPULAR_MODELS)
+        if self.is_claude():
+            return list(LocalLLMManager.CLAUDE_POPULAR_MODELS)
         return []
 
     @staticmethod
@@ -173,19 +240,31 @@ class AIClient:
             if isinstance(items, list):
                 for item in items:
                     if isinstance(item, dict):
+                        # Filter out non-generative Gemini embedding/aqa models when supportedGenerationMethods is present
+                        methods = item.get("supportedGenerationMethods")
+                        if isinstance(methods, list) and "generateContent" not in methods:
+                            continue
                         mid = item.get("id") or item.get("name") or item.get("model") or ""
                         if mid:
-                            models.append(str(mid))
+                            mid_str = str(mid)
+                            if mid_str.startswith("models/"):
+                                mid_str = mid_str[len("models/"):]
+                            models.append(mid_str)
                     elif isinstance(item, str):
-                        models.append(item)
+                        m_str = item[len("models/"):] if item.startswith("models/") else item
+                        models.append(m_str)
         elif isinstance(data, list):
             for item in data:
                 if isinstance(item, dict):
                     mid = item.get("id") or item.get("name") or ""
                     if mid:
-                        models.append(str(mid))
+                        mid_str = str(mid)
+                        if mid_str.startswith("models/"):
+                            mid_str = mid_str[len("models/"):]
+                        models.append(mid_str)
                 elif isinstance(item, str):
-                    models.append(item)
+                    m_str = item[len("models/"):] if item.startswith("models/") else item
+                    models.append(m_str)
         # Deduplicate while preserving order
         seen = set()
         unique = []
@@ -198,6 +277,26 @@ class AIClient:
     @staticmethod
     def _prioritize_nim_models(models: List[str]) -> List[str]:
         popular = LocalLLMManager.NIM_POPULAR_MODELS
+        top = [m for m in popular if m in models]
+        for m in popular:
+            if m not in top:
+                top.append(m)
+        rest = sorted([m for m in models if m not in top])
+        return top + rest
+
+    @staticmethod
+    def _prioritize_gemini_models(models: List[str]) -> List[str]:
+        popular = LocalLLMManager.GEMINI_POPULAR_MODELS
+        top = [m for m in popular if m in models]
+        for m in popular:
+            if m not in top:
+                top.append(m)
+        rest = sorted([m for m in models if m not in top])
+        return top + rest
+
+    @staticmethod
+    def _prioritize_claude_models(models: List[str]) -> List[str]:
+        popular = LocalLLMManager.CLAUDE_POPULAR_MODELS
         top = [m for m in popular if m in models]
         for m in popular:
             if m not in top:
@@ -234,13 +333,18 @@ class AIClient:
         if self.base_url.startswith("builtin://") or chosen == "builtin-linux-mini":
             return "builtin-linux-mini"
         if chosen:
-            return chosen
+            return chosen[len("models/"):] if chosen.startswith("models/") else chosen
 
         if "18080" in self.base_url:
             installed = LocalLLMManager.get_installed_gguf_models()
             if installed:
                 return installed[0]
             return "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+
+        if self.is_gemini():
+            return "gemini-2.5-flash"
+        if self.is_claude():
+            return "claude-3-5-sonnet-latest"
 
         # Try discovering available models from endpoint
         discovered = self.list_models()
@@ -255,6 +359,115 @@ class AIClient:
             return "qwen2.5:1.5b"
         return "local-model"
 
+    def _chat_completion_gemini(
+        self,
+        messages: List[Dict[str, str]],
+        target_model: str,
+        temperature: float = 0.3,
+    ) -> Dict[str, Any]:
+        clean_model = target_model[len("models/"):] if target_model.startswith("models/") else target_model
+        url = f"{self.base_url}/models/{clean_model}:generateContent"
+
+        system_parts = []
+        contents = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            text = msg.get("content", "")
+            if role == "system":
+                if text:
+                    system_parts.append({"text": text})
+            elif role in ("assistant", "model"):
+                contents.append({"role": "model", "parts": [{"text": text}]})
+            else:
+                contents.append({"role": "user", "parts": [{"text": text}]})
+
+        if not contents and system_parts:
+            contents.append({"role": "user", "parts": system_parts})
+            system_parts = []
+
+        payload: Dict[str, Any] = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": 1024,
+            },
+        }
+        if system_parts:
+            payload["systemInstruction"] = {"parts": system_parts}
+
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=body, headers=self._build_headers())
+
+        try:
+            with urllib.request.urlopen(req, timeout=60) as response:
+                if response.status == 200:
+                    data = json.loads(response.read().decode("utf-8", errors="ignore"))
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        chunks = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text")]
+                        content = "".join(chunks).strip()
+                        return {"success": True, "content": content, "model": clean_model}
+                return {"success": False, "error": f"HTTP {response.status}"}
+        except urllib.error.HTTPError as e:
+            detail = self._parse_http_error(e)
+            return {"success": False, "error": f"HTTP Error {e.code} (model '{clean_model}'): {detail}"}
+        except urllib.error.URLError as e:
+            return {"success": False, "error": f"Connection Error: {e.reason}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _chat_completion_claude(
+        self,
+        messages: List[Dict[str, str]],
+        target_model: str,
+        temperature: float = 0.3,
+    ) -> Dict[str, Any]:
+        url = f"{self.base_url}/messages"
+        system_chunks = []
+        chat_msgs = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            text = msg.get("content", "")
+            if role == "system":
+                if text:
+                    system_chunks.append(text)
+            else:
+                chat_msgs.append({"role": "assistant" if role == "assistant" else "user", "content": text})
+
+        if not chat_msgs and system_chunks:
+            chat_msgs.append({"role": "user", "content": "\n\n".join(system_chunks)})
+            system_chunks = []
+
+        payload: Dict[str, Any] = {
+            "model": target_model,
+            "messages": chat_msgs,
+            "max_tokens": 1024,
+            "temperature": temperature,
+        }
+        if system_chunks:
+            payload["system"] = "\n\n".join(system_chunks)
+
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=body, headers=self._build_headers())
+
+        try:
+            with urllib.request.urlopen(req, timeout=60) as response:
+                if response.status == 200:
+                    data = json.loads(response.read().decode("utf-8", errors="ignore"))
+                    content_blocks = data.get("content", [])
+                    chunks = [b.get("text", "") for b in content_blocks if isinstance(b, dict) and b.get("text")]
+                    content = "".join(chunks).strip()
+                    return {"success": True, "content": content, "model": target_model}
+                return {"success": False, "error": f"HTTP {response.status}"}
+        except urllib.error.HTTPError as e:
+            detail = self._parse_http_error(e)
+            return {"success": False, "error": f"HTTP Error {e.code} (model '{target_model}'): {detail}"}
+        except urllib.error.URLError as e:
+            return {"success": False, "error": f"Connection Error: {e.reason}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def chat_completion(
         self,
         messages: List[Dict[str, str]],
@@ -262,13 +475,20 @@ class AIClient:
         temperature: float = 0.3
     ) -> Dict[str, Any]:
         """
-        Sends chat completion request to the OpenAI-compatible endpoint or built-in offline assistant.
+        Sends chat completion request to Google Gemini (Google AI Studio), Anthropic Claude,
+        OpenAI-compatible endpoint, or built-in offline assistant.
         """
         target_model = self.resolve_model(model)
 
         if self.base_url.startswith("builtin://") or target_model == "builtin-linux-mini":
             content = BuiltinLinuxAssistant.respond(messages)
             return {"success": True, "content": content, "model": "builtin-linux-mini"}
+
+        if self.is_gemini_native():
+            return self._chat_completion_gemini(messages, target_model, temperature)
+
+        if self.is_claude():
+            return self._chat_completion_claude(messages, target_model, temperature)
 
         if "18080" in self.base_url and not LocalLLMManager.is_llamacpp_server_running():
             ok_start, start_msg = LocalLLMManager.start_llamacpp_server(target_model)

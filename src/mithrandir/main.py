@@ -15,7 +15,7 @@ class MithrandirApplication(Adw.Application):
     StatusNotifierItem panel applet, automated Smart Boost loop, and desktop notification support.
     """
 
-    def __init__(self, version='0.4.0'):
+    def __init__(self, version='0.4.1'):
         super().__init__(
             application_id='io.github.antonio.Mithrandir',
             flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE
@@ -262,6 +262,6 @@ class MithrandirApplication(Adw.Application):
     def _on_quit(self, _action, _param):
         self.quit()
 
-def main(version='0.4.0'):
+def main(version='0.4.1'):
     app = MithrandirApplication(version=version)
     return app.run(sys.argv)

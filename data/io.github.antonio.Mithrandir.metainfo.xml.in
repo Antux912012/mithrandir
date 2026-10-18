@@ -30,6 +30,16 @@
   </branding>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.4.1" date="2026-10-18">
+      <description>
+        <p>Release v0.4.1 with native Google Gemini AI Studio and Anthropic Claude support:</p>
+        <ul>
+          <li>Added native Google Gemini AI API support distributed via Google AI Studio (v1beta generateContent and model discovery)</li>
+          <li>Added Anthropic Claude API support alongside OpenAI, NVIDIA NIM, Ollama, LM Studio, and llama.cpp</li>
+          <li>Updated AI Diagnostics and Preferences UI with Gemini and Claude provider presets and model selectors</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-10-16">
       <description>
         <p>Major feature release v0.4.0 with expanded AI integration, offline Mini-LLMs, and performance hardening:</p>

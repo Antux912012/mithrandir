@@ -79,7 +79,7 @@ class PreferencesDialog(Adw.PreferencesDialog):
     and AI Diagnostics endpoint, API key, and model selection settings.
     """
 
-    PROVIDER_KEYS = ["builtin", "llamacpp", "ollama", "lmstudio", "nim", "openai"]
+    PROVIDER_KEYS = ["builtin", "llamacpp", "ollama", "lmstudio", "gemini", "claude", "nim", "openai"]
 
     def __init__(self, settings: Gio.Settings):
         super().__init__()
@@ -175,7 +175,7 @@ class PreferencesDialog(Adw.PreferencesDialog):
 
         ai_group = Adw.PreferencesGroup()
         ai_group.set_title("Provider &amp; Model Settings")
-        ai_group.set_description("Configure OpenAI-compatible services (NVIDIA NIM, OpenAI) or Offline Local LLMs (Ollama, LM Studio, Built-in)")
+        ai_group.set_description("Configure Cloud AI APIs (Google Gemini, Claude, NVIDIA NIM, OpenAI) or Offline Local LLMs (Ollama, LM Studio, llama.cpp, Built-in)")
 
         # Provider Preset ComboRow
         provider_labels = [LocalLLMManager.PROVIDER_PRESETS[k]["label"] for k in self.PROVIDER_KEYS]
@@ -196,9 +196,9 @@ class PreferencesDialog(Adw.PreferencesDialog):
         self.url_row.connect("changed", self._on_url_changed)
         ai_group.add(self.url_row)
 
-        # API Key Row (for NVIDIA NIM, OpenAI, OpenRouter, etc.)
+        # API Key Row (for Google Gemini, Claude, NVIDIA NIM, OpenAI, OpenRouter, etc.)
         self.key_row = Adw.PasswordEntryRow()
-        self.key_row.set_title("API Key (NVIDIA NIM / OpenAI / Optional for Local)")
+        self.key_row.set_title("API Key (Gemini / Claude / OpenAI / NIM / Optional for Local)")
         self.key_row.set_text(AISettingsStore.get_str(self.settings, "ai-api-key", ""))
         self.key_row.connect("changed", self._on_key_changed)
         ai_group.add(self.key_row)
@@ -243,6 +243,10 @@ class PreferencesDialog(Adw.PreferencesDialog):
             models = ["builtin-linux-mini"]
         elif "18080" in base_url:
             models = LocalLLMManager.get_installed_gguf_models() or ["qwen2.5-1.5b-instruct-q4_k_m.gguf"]
+        elif "generativelanguage.googleapis.com" in base_url:
+            models = list(LocalLLMManager.GEMINI_POPULAR_MODELS)
+        elif "api.anthropic.com" in base_url:
+            models = list(LocalLLMManager.CLAUDE_POPULAR_MODELS)
         elif "integrate.api.nvidia.com" in base_url:
             models = list(LocalLLMManager.NIM_POPULAR_MODELS)
         elif "11434" in base_url:
