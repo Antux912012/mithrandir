@@ -4,18 +4,20 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <name>Mithrandir</name>
-  <summary>System cleaner, maintenance and AI diagnostics</summary>
+  <summary>Linux system maintenance suite, cleaner, optimizer, and AI diagnostic assistant</summary>
   <description>
     <p>
-      Mithrandir is a modern Linux system maintenance suite and cleaner inspired by BleachBit and Stacer, augmented with AI-powered system diagnosis and interactive fix tools.
+      Mithrandir is a modern Linux cleaner and system management companion built with Python, GTK4, and Libadwaita. Inspired by classic utilities like BleachBit and Stacer, Mithrandir combines deep cleaning with modern GNOME design patterns and intelligent system diagnostics.
     </p>
-    <p>Features include:</p>
+    <p>
+      Whether decluttering application caches, monitoring resource consumption across CPU cores, or getting AI advice on system anomalies, Mithrandir keeps your desktop running smoothly.
+    </p>
     <ul>
-      <li>Fast and safe system cleaning (caches, thumbnails, logs, packages)</li>
-      <li>Real-time resource and hardware monitoring</li>
-      <li>Systemd service inspection and autostart app control</li>
-      <li>Process manager with live status updates</li>
-      <li>AI Diagnostics powered by OpenAI-compatible APIs or local LLMs (LM Studio)</li>
+      <li>System Cleaning: Safe cleaning of package manager residues, cache files, old crash logs, and browser caches</li>
+      <li>Hardware Monitoring: Live visualization of processor cores, RAM usage, swap space, and disk partitions</li>
+      <li>Systemd &amp; Startup Manager: Inspect, enable, or mask system services and desktop autostart applications</li>
+      <li>Interactive Process Manager: Real-time process listing with priority adjustment and search filtering</li>
+      <li>AI System Assistant: Automated troubleshooting suggestions and command generation for system errors</li>
     </ul>
   </description>
   <url type="homepage">https://github.com/Antux912012/mithrandir</url>
