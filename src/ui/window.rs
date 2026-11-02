@@ -1,13 +1,15 @@
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, Image, Label, ListBox, ListBoxRow, Orientation, ScrolledWindow, Stack,
+    Align, Box as GtkBox, Button, Image, Label, ListBox, ListBoxRow, Orientation, PolicyType,
+    ScrolledWindow, Separator, Stack,
 };
 use libadwaita as adw;
 use adw::prelude::*;
 use adw::{
     AboutDialog, ApplicationWindow, Breakpoint, BreakpointCondition, BreakpointConditionLengthType,
-    HeaderBar, LengthUnit, OverlaySplitView, ToastOverlay, ToolbarView, WindowTitle,
+    HeaderBar, LengthUnit, ToastOverlay, ToolbarView, WindowTitle,
 };
+use std::cell::Cell;
 use std::rc::Rc;
 use crate::ui::autostart::AutostartPage;
 use crate::ui::btrfs::BtrfsPage;
@@ -44,12 +46,24 @@ impl MithrandirWindow {
         let title_widget = WindowTitle::new("Mithrandir", "Dashboard");
         header_bar.set_title_widget(Some(&title_widget));
 
-        // Hamburger icon to toggle sidebar
-        let menu_btn = Button::builder()
-            .icon_name("open-menu-symbolic")
-            .tooltip_text("Toggle Navigation Menu")
+        // Top Left Toggle Box aligned strictly with the sidebar icon column (64px width)
+        let toggle_box = GtkBox::builder()
+            .orientation(Orientation::Horizontal)
+            .width_request(64)
+            .halign(Align::Center)
+            .valign(Align::Center)
             .build();
-        header_bar.pack_start(&menu_btn);
+
+        let menu_btn = Button::builder()
+            .icon_name("sidebar-show-symbolic")
+            .tooltip_text("Collapse Sidebar")
+            .halign(Align::Center)
+            .valign(Align::Center)
+            .build();
+        menu_btn.add_css_class("flat");
+        menu_btn.add_css_class("sidebar-toggle-btn");
+        toggle_box.append(&menu_btn);
+        header_bar.pack_start(&toggle_box);
 
         // Header Right: Preferences & Info Buttons
         let pref_btn = Button::builder()
@@ -66,14 +80,13 @@ impl MithrandirWindow {
 
         toolbar_view.add_top_bar(&header_bar);
 
-        // Stack for all functional views
+        // Stack for functional pages
         let stack = Stack::builder()
             .hexpand(true)
             .vexpand(true)
             .transition_type(gtk4::StackTransitionType::Crossfade)
             .build();
 
-        // Instantiate subpages
         let page_dashboard = DashboardPage::build(Some(toast_overlay.clone()));
         let page_kernel_power = KernelPowerPage::build(Some(toast_overlay.clone()));
         let page_cleaner = CleanerPage::build();
@@ -106,7 +119,7 @@ impl MithrandirWindow {
             ("grub", "GRUB Bootloader", "preferences-system-symbolic"),
         ];
 
-        // Sidebar Navigation
+        // Sidebar Container (Expanded: 220px, Collapsed: 64px)
         let sidebar_box = GtkBox::builder()
             .orientation(Orientation::Vertical)
             .width_request(220)
@@ -117,7 +130,7 @@ impl MithrandirWindow {
         let sidebar_scroller = ScrolledWindow::builder()
             .hexpand(true)
             .vexpand(true)
-            .hscrollbar_policy(gtk4::PolicyType::Never)
+            .hscrollbar_policy(PolicyType::Never)
             .build();
 
         let list_box = ListBox::builder().build();
@@ -126,6 +139,8 @@ impl MithrandirWindow {
         let stack_rc = Rc::new(stack.clone());
         let title_rc = Rc::new(title_widget.clone());
 
+        let mut nav_items = Vec::new();
+
         for (id, label_str, icon_name) in pages {
             let row = ListBoxRow::new();
             let row_box = GtkBox::builder()
@@ -133,11 +148,13 @@ impl MithrandirWindow {
                 .spacing(12)
                 .margin_top(8)
                 .margin_bottom(8)
-                .margin_start(12)
-                .margin_end(12)
+                .margin_start(10)
+                .margin_end(10)
                 .build();
 
             let icon = Image::from_icon_name(icon_name);
+            icon.set_pixel_size(18);
+
             let lbl = Label::builder()
                 .label(label_str)
                 .hexpand(true)
@@ -158,25 +175,70 @@ impl MithrandirWindow {
                 stack_clone.set_visible_child_name(&id_str);
                 title_clone.set_subtitle(&title_str);
             });
+
+            nav_items.push((icon, lbl, row.clone(), label_str.to_string()));
         }
 
         sidebar_scroller.set_child(Some(&list_box));
         sidebar_box.append(&sidebar_scroller);
 
-        // Adaptive Overlay Split View (GNOME HIG)
-        let split_view = OverlaySplitView::builder()
-            .sidebar(&sidebar_box)
-            .content(&stack)
-            .min_sidebar_width(220.0)
-            .max_sidebar_width(260.0)
-            .collapsed(false)
-            .show_sidebar(true)
-            .build();
+        // Sidebar expand / collapse controller (Zen / Firefox style)
+        let is_expanded = Rc::new(Cell::new(true));
+        let nav_items_rc = Rc::new(nav_items);
 
-        let split_view_rc = Rc::new(split_view.clone());
+        let apply_sidebar_state = {
+            let sidebar_box = sidebar_box.clone();
+            let nav_items = nav_items_rc.clone();
+            let menu_btn = menu_btn.clone();
+            let is_expanded = is_expanded.clone();
+            Rc::new(move |expanded: bool| {
+                is_expanded.set(expanded);
+                if expanded {
+                    sidebar_box.set_width_request(220);
+                    menu_btn.set_tooltip_text(Some("Collapse Sidebar"));
+                    for (icon, lbl, row, _title) in nav_items.iter() {
+                        lbl.set_visible(true);
+                        icon.set_hexpand(false);
+                        icon.set_halign(Align::Start);
+                        row.set_tooltip_text(None);
+                    }
+                } else {
+                    sidebar_box.set_width_request(64);
+                    menu_btn.set_tooltip_text(Some("Expand Sidebar"));
+                    for (icon, lbl, row, title) in nav_items.iter() {
+                        lbl.set_visible(false);
+                        icon.set_hexpand(true);
+                        icon.set_halign(Align::Center);
+                        row.set_tooltip_text(Some(title));
+                    }
+                }
+            })
+        };
+
+        let apply_toggle = apply_sidebar_state.clone();
+        let is_expanded_btn = is_expanded.clone();
+        menu_btn.connect_clicked(move |_| {
+            apply_toggle(!is_expanded_btn.get());
+        });
+
+        // Breakpoint: adapt automatically on smaller/mobile viewports (<= 720sp)
+        let breakpoint = Breakpoint::new(BreakpointCondition::new_length(
+            BreakpointConditionLengthType::MaxWidth,
+            720.0,
+            LengthUnit::Sp,
+        ));
+        let apply_bp_apply = apply_sidebar_state.clone();
+        breakpoint.connect_apply(move |_| {
+            apply_bp_apply(false);
+        });
+        let apply_bp_unapply = apply_sidebar_state.clone();
+        breakpoint.connect_unapply(move |_| {
+            apply_bp_unapply(true);
+        });
+        window.add_breakpoint(breakpoint);
+
         let stack_for_nav = stack_rc.clone();
         let title_for_nav = title_rc.clone();
-        let split_view_for_nav = split_view_rc.clone();
 
         list_box.connect_row_selected(move |_, row_opt| {
             if let Some(row) = row_opt {
@@ -185,31 +247,25 @@ impl MithrandirWindow {
                     let (id, title_str, _) = pages[idx as usize];
                     stack_for_nav.set_visible_child_name(id);
                     title_for_nav.set_subtitle(title_str);
-
-                    // If mobile / collapsed, hide sidebar after navigation
-                    if split_view_for_nav.is_collapsed() {
-                        split_view_for_nav.set_show_sidebar(false);
-                    }
                 }
             }
         });
 
-        // Breakpoint for dynamic adaptive responsive layout (mobile / narrow screen)
-        let breakpoint = Breakpoint::new(BreakpointCondition::new_length(
-            BreakpointConditionLengthType::MaxWidth,
-            720.0,
-            LengthUnit::Sp,
-        ));
-        breakpoint.add_setter(&split_view, "collapsed", Some(&true.into()));
-        window.add_breakpoint(breakpoint);
+        // Main Horizontal View: [Sidebar] | [Separator] | [Stack]
+        let main_box = GtkBox::builder()
+            .orientation(Orientation::Horizontal)
+            .hexpand(true)
+            .vexpand(true)
+            .build();
 
-        // Connect hamburger button to toggle sidebar
-        let split_view_menu = split_view_rc.clone();
-        menu_btn.connect_clicked(move |_| {
-            split_view_menu.set_show_sidebar(!split_view_menu.shows_sidebar());
-        });
+        main_box.append(&sidebar_box);
 
-        toolbar_view.set_content(Some(&split_view));
+        let sep = Separator::new(Orientation::Vertical);
+        main_box.append(&sep);
+
+        main_box.append(&stack);
+
+        toolbar_view.set_content(Some(&main_box));
         toast_overlay.set_child(Some(&toolbar_view));
         window.set_content(Some(&toast_overlay));
 

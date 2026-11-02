@@ -29,6 +29,13 @@ impl ThemeManager {
         color: #ffffff;
     }
 
+    headerbar button.sidebar-toggle-btn {
+        min-width: 36px;
+        min-height: 36px;
+        padding: 4px;
+        border-radius: 8px;
+    }
+
     .sidebar {
         background: linear-gradient(180deg, #102a49 0%, #0c2037 100%);
         border-right: 1px solid rgba(43, 123, 221, 0.25);
@@ -112,6 +119,13 @@ impl ThemeManager {
     headerbar button:hover {
         background: rgba(255, 255, 255, 0.22);
         color: #ffffff;
+    }
+
+    headerbar button.sidebar-toggle-btn {
+        min-width: 36px;
+        min-height: 36px;
+        padding: 4px;
+        border-radius: 8px;
     }
 
     .sidebar {

@@ -31,33 +31,39 @@
 
 ---
 
-## ⚡ Current Preview Status
+## 📸 Screenshots
 
-| Feature / Area | Original [Mithrandir](https://github.com/Antux912012/mithrandir) | Mithrandir (Rust) | Status |
-| :--- | :--- | :--- | :--- |
-| **System Dashboard & Telemetry** | Full | Full (CPU, Dual GPU, Network Rx/Tx, Thermal Zones, Battery Wh/Health, Architecture) | ✅ Parity |
-| **Smart Boost (RAM & Cache trim)**| Full | Full (Debounced, Re-entrancy Guard, Cooldown) | ✅ Parity |
-| **Multi-Threaded Cache Cleaner** | Full | Full (Thumbnails, Browser, Stremio, Dev, Trash, Journal) | ✅ Parity |
-| **Process & Task Explorer** | Full (Stacer style) | Live accurate CPU% & RAM, Search, Sorting | ✅ Parity |
-| **Startup Applications** | Full | Desktop autostart management | ✅ Parity |
-| **Systemd Services Manager** | Full with unit logs | Unit inspection & control | ✅ Parity |
-| **Package Uninstaller** | APT, DNF, Pacman, Flatpak, Snap, pip | Multi-distro package management & uninstaller | ✅ Parity |
-| **System Tray & Background Mode** | AppIndicator (GTK3) | Pure Rust StatusNotifierItem (SNI) + DBusMenu (GTK4 clean, no GTK3 collision) | ✅ Parity |
-| **Hardware Power Saver** | TLP / Power Profiles | Hardware CPU Turbo/EPP + PCIe ASPM Powersupersave & Tray Sync | ✅ Parity |
-| **Anti-Malware (ClamAV)** | Full scanner & signatures | 1-Click Installer, FreshClam Lock Fix, Quarantine Vault | ✅ Parity |
-| **BTRFS Snapshots** | Automated snapshots & restore | Snapshot management & subvolumes | ✅ Parity |
-| **GRUB Bootloader** | Full timeout & kernel select | Timeout & boot configuration | ✅ Parity |
-| **AI Diagnostics & Local LLM** | Ollama, NIM, OpenAI, in-app Qwen | Built-in offline assistant, Qwen 2.5 + llama.cpp engine | ✅ Parity |
+| 📊 Real-Time Dashboard & Telemetry | ⚡ CachyOS Kernel & Power Management |
+| :---: | :---: |
+| ![Dashboard](data/screenshots/01-dashboard.png) | ![Kernel & Power](data/screenshots/02-kernel-power.png) |
 
-### 🎩 Fedora & RHEL Compatibility Highlights
+| 🧹 Multi-Category Deep Cache Cleaner | 📦 Multi-Backend Package Uninstaller |
+| :---: | :---: |
+| ![Cleaner](data/screenshots/03-cleaner.png) | ![Uninstaller](data/screenshots/04-uninstaller.png) |
 
-Mithrandir includes dedicated compatibility support for Fedora and enterprise Red Hat derivatives:
-- **Native `.rpm` Packaging**: Pre-built standalone `.rpm` packages and built-in `make rpm` target using `rpmbuild`.
-- **Package Manager Cache Cleaner**: Scans and cleans both `/var/cache/libdnf5` and `/var/cache/dnf` caches.
-- **Fedora GRUB2 Support**: Full support for Fedora's `/boot/grub2/grub.cfg` configuration scheme.
-- **ClamAV Integration**: Automatic detection and installation of Fedora's `clamav`, `clamav-freshclam`, and `clamd` packages.
-- **Default Btrfs Snapshot Support**: Integrates directly with Fedora's default Btrfs subvolumes and snapshot management.
-- **Fedora-Aware Diagnostics**: Built-in AI diagnostic commands tailored for `dnf` and `systemd`.
+<p align="center">
+  <img src="data/screenshots/05-grub.png" width="90%" alt="GRUB Bootloader Configuration" />
+</p>
+
+---
+
+## ⚡ Current Feature Matrix
+
+| Feature / Area | Capabilities | Status |
+| :--- | :--- | :--- |
+| **System Dashboard & Telemetry** | CPU, Dual GPU, Network Rx/Tx, Thermal Zones, Battery Wh/Health, Host Specs | ✅ Active |
+| **CachyOS Schedulers & Power** | BORE runtime/persist toggle, sched-ext (SCX) BPF schedulers, CPU governors, EPP, Turbo Boost | ✅ Active |
+| **Smart Boost (RAM & Cache trim)**| Standby cache trimming, debounced re-entrancy guard, automated threshold daemon | ✅ Active |
+| **Multi-Threaded Cache Cleaner** | Thumbnails, Browser, Stremio, Dev, Trash, Journal, Flatpak sandbox safe cache | ✅ Active |
+| **Process & Task Explorer** | Live accurate CPU% & RAM, filter, search, kill/terminate signals | ✅ Active |
+| **Startup Applications** | XDG desktop autostart entry management | ✅ Active |
+| **Systemd Services Manager** | Unit inspection, start/stop/restart, and live systemd service status | ✅ Active |
+| **Package Uninstaller** | APT, DNF, Pacman, Flatpak, Snap, and Pip package management | ✅ Active |
+| **System Tray & Background Mode** | Pure Rust StatusNotifierItem (SNI) + DBusMenu with auto dark/light theme | ✅ Active |
+| **BTRFS Snapshots** | Automated snapshots, subvolume inspection & rollback management | ✅ Active |
+| **GRUB Bootloader** | Kernel parameters, boot timeouts & default entry selection | ✅ Active |
+
+---
 
 ### 🛡️ System Tray & Background Architecture (GTK4 + Pure Rust D-Bus)
 
