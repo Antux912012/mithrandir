@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="io.github.antonio.MithrandirRS">
+  <schema id="io.github.antonio.MithrandirRS" path="/io/github/antonio/MithrandirRS/">
+    <key name="window-width" type="i">
+      <default>1080</default>
+      <summary>Window width</summary>
+    </key>
+    <key name="window-height" type="i">
+      <default>720</default>
+      <summary>Window height</summary>
+    </key>
+    <key name="is-maximized" type="b">
+      <default>false</default>
+      <summary>Window maximized</summary>
+    </key>
+    <key name="keep-in-background" type="b">
+      <default>true</default>
+      <summary>Whether to keep Mithrandir running in background when window is closed</summary>
+    </key>
+    <key name="show-panel-indicator" type="b">
+      <default>true</default>
+      <summary>Whether to display the Mithrandir applet in the GNOME top bar panel</summary>
+    </key>
+    <key name="smart-boost-enabled" type="b">
+      <default>true</default>
+      <summary>Whether Smart Boost auto monitoring is enabled</summary>
+    </key>
+    <key name="smart-boost-ram-threshold" type="i">
+      <default>80</default>
+      <summary>RAM threshold percentage to trigger auto boost</summary>
+    </key>
+    <key name="smart-boost-temp-threshold-mb" type="i">
+      <default>1024</default>
+      <summary>Temporary files threshold in MB to trigger auto boost</summary>
+    </key>
+    <key name="smart-boost-interval-min" type="i">
+      <default>15</default>
+      <summary>Minimum cooldown interval in minutes between automated Smart Boost triggers</summary>
+    </key>
+    <key name="smart-boost-notify" type="b">
+      <default>true</default>
+      <summary>Whether to notify when Smart Boost triggers</summary>
+    </key>
+    <key name="antivirus-auto-update-before-scan" type="b">
+      <default>false</default>
+      <summary>Automatically run FreshClam before starting malware scans</summary>
+    </key>
+    <key name="antivirus-definitions-max-age-hours" type="i">
+      <default>24</default>
+      <summary>Maximum age of virus definitions in hours before considered stale</summary>
+    </key>
+    <key name="ai-provider" type="s">
+      <default>'builtin'</default>
+      <summary>Selected AI inference backend provider</summary>
+    </key>
+    <key name="ai-base-url" type="s">
+      <default>'builtin://linux-mini'</default>
+      <summary>Base URL for OpenAI-compatible LLM endpoint</summary>
+    </key>
+    <key name="ai-api-key" type="s">
+      <default>''</default>
+      <summary>API key for AI provider</summary>
+    </key>
+    <key name="ai-model" type="s">
+      <default>'builtin-linux-mini'</default>
+      <summary>Model identifier for AI provider</summary>
+    </key>
+  </schema>
+</schemalist>
