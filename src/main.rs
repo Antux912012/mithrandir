@@ -158,6 +158,13 @@ fn main() {
             }
         });
 
+        // Apply hardware acceleration settings (Vulkan / OpenGL / Cairo CPU fallback)
+        let init_settings = mithrandir::AppSettings::get();
+        mithrandir::GraphicsManager::apply_acceleration_settings(
+            init_settings.hardware_acceleration,
+            &init_settings.graphics_renderer,
+        );
+
         let app = adw::Application::builder()
             .application_id("io.github.antux912012.Mithrandir")
             .build();

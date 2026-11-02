@@ -2,212 +2,332 @@ use gtk4::gdk::Display;
 use gtk4::CssProvider;
 use libadwaita as adw;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GnomeAccent {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub hex: &'static str,
+    pub dark_header: &'static str,
+    pub dark_sidebar: &'static str,
+}
+
+pub static GNOME_ACCENTS: &[GnomeAccent] = &[
+    GnomeAccent {
+        id: "blue",
+        name: "Blue",
+        hex: "#2b7bdd",
+        dark_header: "#174272",
+        dark_sidebar: "#102a49",
+    },
+    GnomeAccent {
+        id: "teal",
+        name: "Teal",
+        hex: "#2190a4",
+        dark_header: "#114c57",
+        dark_sidebar: "#0c3239",
+    },
+    GnomeAccent {
+        id: "green",
+        name: "Green",
+        hex: "#3a944a",
+        dark_header: "#1c4e25",
+        dark_sidebar: "#13361a",
+    },
+    GnomeAccent {
+        id: "yellow",
+        name: "Yellow",
+        hex: "#c88800",
+        dark_header: "#634400",
+        dark_sidebar: "#442f00",
+    },
+    GnomeAccent {
+        id: "orange",
+        name: "Orange",
+        hex: "#ed5b00",
+        dark_header: "#762e00",
+        dark_sidebar: "#522000",
+    },
+    GnomeAccent {
+        id: "red",
+        name: "Red",
+        hex: "#e62d42",
+        dark_header: "#741721",
+        dark_sidebar: "#511017",
+    },
+    GnomeAccent {
+        id: "pink",
+        name: "Pink",
+        hex: "#d56199",
+        dark_header: "#6b314d",
+        dark_sidebar: "#492235",
+    },
+    GnomeAccent {
+        id: "purple",
+        name: "Purple",
+        hex: "#9141ac",
+        dark_header: "#492156",
+        dark_sidebar: "#33173c",
+    },
+    GnomeAccent {
+        id: "slate",
+        name: "Slate",
+        hex: "#637889",
+        dark_header: "#323c45",
+        dark_sidebar: "#22292f",
+    },
+];
+
+thread_local! {
+    static CSS_PROVIDER: CssProvider = CssProvider::new();
+}
+
 pub struct ThemeManager;
 
 impl ThemeManager {
-    pub const ACCENT_COLOR: &'static str = "#2b7bdd";
-
-    pub const DARK_CSS: &'static str = r#"
-    /* Mithrandir Theme - Dark Mode Shaded from #2b7bdd */
-    headerbar {
-        background: linear-gradient(180deg, #174272 0%, #12345a 100%);
-        color: #ffffff;
-        border-bottom: 1px solid rgba(43, 123, 221, 0.35);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    pub fn get_accents() -> &'static [GnomeAccent] {
+        GNOME_ACCENTS
     }
 
-    headerbar windowtitle, headerbar .title, headerbar .subtitle {
-        color: #ffffff;
+    pub fn get_accent_by_id(id: &str) -> GnomeAccent {
+        GNOME_ACCENTS
+            .iter()
+            .find(|a| a.id.eq_ignore_ascii_case(id))
+            .copied()
+            .unwrap_or(GNOME_ACCENTS[0])
     }
 
-    headerbar button {
-        color: #ffffff;
-    }
+    pub fn generate_css(accent: &GnomeAccent, is_dark: bool) -> String {
+        if is_dark {
+            format!(
+                r#"
+                /* Mithrandir GNOME Accent - Dark Mode ({name}) */
+                @define-color accent_color {hex};
+                @define-color accent_bg_color {hex};
 
-    headerbar button:hover {
-        background: rgba(255, 255, 255, 0.15);
-        color: #ffffff;
-    }
+                headerbar {{
+                    background: linear-gradient(180deg, {dark_header} 0%, rgba(10, 20, 35, 0.95) 100%);
+                    color: #ffffff;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+                }}
 
-    headerbar button.sidebar-toggle-btn {
-        min-width: 36px;
-        min-height: 36px;
-        padding: 4px;
-        border-radius: 8px;
-    }
+                headerbar windowtitle, headerbar .title, headerbar .subtitle {{
+                    color: #ffffff;
+                }}
 
-    .sidebar {
-        background: linear-gradient(180deg, #102a49 0%, #0c2037 100%);
-        border-right: 1px solid rgba(43, 123, 221, 0.25);
-    }
+                headerbar button {{
+                    color: #ffffff;
+                }}
 
-    .navigation-sidebar {
-        background: transparent;
-    }
+                headerbar button:hover {{
+                    background: rgba(255, 255, 255, 0.15);
+                    color: #ffffff;
+                }}
 
-    .navigation-sidebar row {
-        color: #dbeafe;
-        border-radius: 8px;
-        margin: 2px 6px;
-        transition: all 150ms ease;
-    }
+                headerbar button.sidebar-toggle-btn {{
+                    min-width: 36px;
+                    min-height: 36px;
+                    padding: 4px;
+                    border-radius: 8px;
+                }}
 
-    .navigation-sidebar row:hover {
-        background: rgba(43, 123, 221, 0.25);
-        color: #ffffff;
-    }
+                .sidebar {{
+                    background: linear-gradient(180deg, {dark_sidebar} 0%, rgba(8, 16, 26, 0.98) 100%);
+                    border-right: 1px solid rgba(255, 255, 255, 0.08);
+                }}
 
-    .navigation-sidebar row:selected {
-        background: #2b7bdd;
-        color: #ffffff;
-        font-weight: 600;
-        box-shadow: 0 2px 6px rgba(43, 123, 221, 0.4);
-    }
+                .navigation-sidebar {{
+                    background: transparent;
+                }}
 
-    .navigation-sidebar row:selected label,
-    .navigation-sidebar row:selected image {
-        color: #ffffff;
-    }
+                .navigation-sidebar row {{
+                    color: #f1f5f9;
+                    border-radius: 8px;
+                    margin: 2px 6px;
+                    transition: all 150ms ease;
+                }}
 
-    .smart-boost-card {
-        background: linear-gradient(135deg, rgba(43, 123, 221, 0.22) 0%, rgba(20, 60, 110, 0.28) 100%);
-        border: 1px solid rgba(43, 123, 221, 0.35);
-        border-radius: 12px;
-        padding: 16px;
-    }
+                .navigation-sidebar row:hover {{
+                    background: rgba(255, 255, 255, 0.08);
+                    color: #ffffff;
+                }}
 
-    button.suggested-action {
-        background-color: #2b7bdd;
-        color: #ffffff;
-        font-weight: bold;
-    }
+                .navigation-sidebar row:selected {{
+                    background: {hex};
+                    color: #ffffff;
+                    font-weight: 600;
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+                }}
 
-    button.suggested-action:hover {
-        background-color: #3b8cf0;
-    }
+                .navigation-sidebar row:selected label,
+                .navigation-sidebar row:selected image {{
+                    color: #ffffff;
+                }}
 
-    progressbar > trough > progress {
-        background-color: #2b7bdd;
-        border-radius: 4px;
-    }
+                .smart-boost-card {{
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(0, 0, 0, 0.2) 100%);
+                    border: 1px solid {hex};
+                    border-radius: 12px;
+                    padding: 16px;
+                }}
 
-    .metric-card {
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(43, 123, 221, 0.25);
-        border-radius: 12px;
-        padding: 14px;
-    }
-    "#;
+                button.suggested-action {{
+                    background-color: {hex};
+                    color: #ffffff;
+                    font-weight: bold;
+                }}
 
-    pub const LIGHT_CSS: &'static str = r#"
-    /* Mithrandir Theme - Light Mode Shaded from #2b7bdd */
-    headerbar {
-        background: linear-gradient(180deg, #2f84e8 0%, #2571cb 100%);
-        color: #ffffff;
-        border-bottom: 1px solid rgba(34, 103, 186, 0.4);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-    }
+                button.suggested-action:hover {{
+                    filter: brightness(1.15);
+                }}
 
-    headerbar windowtitle, headerbar .title, headerbar .subtitle {
-        color: #ffffff;
-    }
+                progressbar > trough > progress {{
+                    background-color: {hex};
+                    border-radius: 4px;
+                }}
 
-    headerbar button {
-        color: #ffffff;
-    }
+                .metric-card {{
+                    background: rgba(255, 255, 255, 0.04);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 12px;
+                    padding: 14px;
+                }}
+                "#,
+                name = accent.name,
+                hex = accent.hex,
+                dark_header = accent.dark_header,
+                dark_sidebar = accent.dark_sidebar,
+            )
+        } else {
+            format!(
+                r#"
+                /* Mithrandir GNOME Accent - Light Mode ({name}) */
+                @define-color accent_color {hex};
+                @define-color accent_bg_color {hex};
 
-    headerbar button:hover {
-        background: rgba(255, 255, 255, 0.22);
-        color: #ffffff;
-    }
+                headerbar {{
+                    background: linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%);
+                    color: #1e293b;
+                    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+                }}
 
-    headerbar button.sidebar-toggle-btn {
-        min-width: 36px;
-        min-height: 36px;
-        padding: 4px;
-        border-radius: 8px;
-    }
+                headerbar windowtitle, headerbar .title, headerbar .subtitle {{
+                    color: #1e293b;
+                }}
 
-    .sidebar {
-        background: linear-gradient(180deg, #edf4fc 0%, #e2eefb 100%);
-        border-right: 1px solid rgba(43, 123, 221, 0.25);
-    }
+                headerbar button {{
+                    color: #334155;
+                }}
 
-    .navigation-sidebar {
-        background: transparent;
-    }
+                headerbar button:hover {{
+                    background: rgba(0, 0, 0, 0.06);
+                    color: #0f172a;
+                }}
 
-    .navigation-sidebar row {
-        color: #173e6b;
-        border-radius: 8px;
-        margin: 2px 6px;
-        transition: all 150ms ease;
-    }
+                headerbar button.sidebar-toggle-btn {{
+                    min-width: 36px;
+                    min-height: 36px;
+                    padding: 4px;
+                    border-radius: 8px;
+                }}
 
-    .navigation-sidebar row:hover {
-        background: rgba(43, 123, 221, 0.15);
-        color: #0e2a4a;
-    }
+                .sidebar {{
+                    background: #f1f5f9;
+                    border-right: 1px solid rgba(0, 0, 0, 0.08);
+                }}
 
-    .navigation-sidebar row:selected {
-        background: #2b7bdd;
-        color: #ffffff;
-        font-weight: 600;
-        box-shadow: 0 2px 6px rgba(43, 123, 221, 0.35);
-    }
+                .navigation-sidebar {{
+                    background: transparent;
+                }}
 
-    .navigation-sidebar row:selected label,
-    .navigation-sidebar row:selected image {
-        color: #ffffff;
-    }
+                .navigation-sidebar row {{
+                    color: #334155;
+                    border-radius: 8px;
+                    margin: 2px 6px;
+                    transition: all 150ms ease;
+                }}
 
-    .smart-boost-card {
-        background: linear-gradient(135deg, rgba(43, 123, 221, 0.12) 0%, rgba(220, 235, 252, 0.8) 100%);
-        border: 1px solid rgba(43, 123, 221, 0.3);
-        border-radius: 12px;
-        padding: 16px;
-    }
+                .navigation-sidebar row:hover {{
+                    background: rgba(0, 0, 0, 0.05);
+                    color: #0f172a;
+                }}
 
-    button.suggested-action {
-        background-color: #2b7bdd;
-        color: #ffffff;
-        font-weight: bold;
-    }
+                .navigation-sidebar row:selected {{
+                    background: {hex};
+                    color: #ffffff;
+                    font-weight: 600;
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+                }}
 
-    button.suggested-action:hover {
-        background-color: #3b8cf0;
-    }
+                .navigation-sidebar row:selected label,
+                .navigation-sidebar row:selected image {{
+                    color: #ffffff;
+                }}
 
-    progressbar > trough > progress {
-        background-color: #2b7bdd;
-        border-radius: 4px;
-    }
+                .smart-boost-card {{
+                    background: linear-gradient(135deg, rgba(0, 0, 0, 0.02) 0%, rgba(0, 0, 0, 0.06) 100%);
+                    border: 1px solid {hex};
+                    border-radius: 12px;
+                    padding: 16px;
+                }}
 
-    .metric-card {
-        background: rgba(0, 0, 0, 0.02);
-        border: 1px solid rgba(43, 123, 221, 0.2);
-        border-radius: 12px;
-        padding: 14px;
+                button.suggested-action {{
+                    background-color: {hex};
+                    color: #ffffff;
+                    font-weight: bold;
+                }}
+
+                button.suggested-action:hover {{
+                    filter: brightness(0.9);
+                }}
+
+                progressbar > trough > progress {{
+                    background-color: {hex};
+                    border-radius: 4px;
+                }}
+
+                .metric-card {{
+                    background: rgba(0, 0, 0, 0.02);
+                    border: 1px solid rgba(0, 0, 0, 0.08);
+                    border-radius: 12px;
+                    padding: 14px;
+                }}
+                "#,
+                name = accent.name,
+                hex = accent.hex,
+            )
+        }
     }
-    "#;
 
     pub fn apply_theme() {
+        let cfg = crate::backend::AppSettings::get();
+        Self::apply_accent(&cfg.accent_color);
+    }
+
+    pub fn apply_accent(accent_id: &str) {
         if let Some(display) = Display::default() {
-            let provider = CssProvider::new();
-            let style_manager = adw::StyleManager::default();
-            let is_dark = style_manager.is_dark();
-            provider.load_from_string(if is_dark { Self::DARK_CSS } else { Self::LIGHT_CSS });
+            CSS_PROVIDER.with(|provider| {
+                let style_manager = adw::StyleManager::default();
+                let is_dark = style_manager.is_dark();
 
-            gtk4::style_context_add_provider_for_display(
-                &display,
-                &provider,
-                gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-            );
+                let accent = Self::get_accent_by_id(accent_id);
+                let css = Self::generate_css(&accent, is_dark);
+                provider.load_from_string(&css);
 
-            let provider_clone = provider.clone();
-            style_manager.connect_dark_notify(move |sm| {
-                let dark = sm.is_dark();
-                provider_clone.load_from_string(if dark { Self::DARK_CSS } else { Self::LIGHT_CSS });
+                gtk4::style_context_add_provider_for_display(
+                    &display,
+                    provider,
+                    gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+                );
+
+                let provider_clone = provider.clone();
+                let accent_id_owned = accent_id.to_string();
+                style_manager.connect_dark_notify(move |sm| {
+                    let dark = sm.is_dark();
+                    let acc = Self::get_accent_by_id(&accent_id_owned);
+                    provider_clone.load_from_string(&Self::generate_css(&acc, dark));
+                });
             });
         }
     }

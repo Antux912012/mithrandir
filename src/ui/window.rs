@@ -11,6 +11,7 @@ use adw::{
 };
 use std::cell::Cell;
 use std::rc::Rc;
+use crate::backend::settings::AppSettings;
 use crate::ui::ai::AIPage;
 use crate::ui::autostart::AutostartPage;
 use crate::ui::btrfs::BtrfsPage;
@@ -148,6 +149,7 @@ impl MithrandirWindow {
             .build();
         list_box.add_css_class("navigation-sidebar");
 
+        let initial_settings = AppSettings::get();
         let mut nav_items = Vec::new();
 
         for (id, label_str, icon_name) in pages {
@@ -173,6 +175,10 @@ impl MithrandirWindow {
             row_box.append(&icon);
             row_box.append(&lbl);
             row.set_child(Some(&row_box));
+
+            let is_disabled = initial_settings.disabled_tabs.iter().any(|t| t == id);
+            row.set_visible(!is_disabled);
+
             list_box.append(&row);
 
             nav_items.push((icon, lbl, row.clone(), label_str.to_string(), id));
@@ -251,9 +257,13 @@ impl MithrandirWindow {
             }
         });
 
-        // Highlight first item ("Dashboard") at startup
-        if let Some(first_row) = list_box.row_at_index(0) {
-            list_box.select_row(Some(&first_row));
+        // Highlight first visible item at startup
+        for (_, _, row, _, id) in nav_items_rc.iter() {
+            if !initial_settings.disabled_tabs.iter().any(|t| t == id) {
+                list_box.select_row(Some(row));
+                stack.set_visible_child_name(id);
+                break;
+            }
         }
 
         // Main Horizontal View: [Sidebar (fixed width)] | [Separator] | [Stack (hexpand true)]
@@ -276,9 +286,33 @@ impl MithrandirWindow {
 
         // Connect Preferences
         let win_weak = window.downgrade();
+        let nav_items_for_pref = nav_items_rc.clone();
+        let list_box_for_pref = list_box.clone();
+        let stack_for_pref = stack.clone();
         pref_btn.connect_clicked(move |_| {
             if let Some(win) = win_weak.upgrade() {
-                let dlg = PreferencesDialog::build(&win);
+                let nav_ref = nav_items_for_pref.clone();
+                let lb_ref = list_box_for_pref.clone();
+                let st_ref = stack_for_pref.clone();
+                let dlg = PreferencesDialog::build(&win, move || {
+                    let cfg = AppSettings::get();
+                    let mut first_visible = None;
+                    for (_, _, row, _, id) in nav_ref.iter() {
+                        let is_disabled = cfg.disabled_tabs.iter().any(|t| t == id);
+                        row.set_visible(!is_disabled);
+                        if !is_disabled && first_visible.is_none() {
+                            first_visible = Some((row.clone(), *id));
+                        }
+                    }
+                    if let Some(selected) = lb_ref.selected_row() {
+                        if !selected.is_visible() {
+                            if let Some((first_row, first_id)) = first_visible {
+                                lb_ref.select_row(Some(&first_row));
+                                st_ref.set_visible_child_name(first_id);
+                            }
+                        }
+                    }
+                });
                 dlg.present();
             }
         });

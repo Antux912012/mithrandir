@@ -11,7 +11,30 @@ pub struct AppSettings {
     pub ram_threshold: f64,
     pub cooldown_minutes: u64,
     pub desktop_notifications: bool,
+    #[serde(default = "default_true")]
+    pub hardware_acceleration: bool,
+    #[serde(default = "default_auto")]
+    pub graphics_renderer: String,
+    #[serde(default = "default_accent")]
+    pub accent_color: String,
+    #[serde(default)]
+    pub disabled_tabs: Vec<String>,
+    #[serde(default = "default_ai_provider")]
+    pub ai_provider: String,
+    #[serde(default = "default_ai_endpoint")]
+    pub ai_endpoint: String,
+    #[serde(default)]
+    pub ai_api_key: String,
+    #[serde(default = "default_ai_model")]
+    pub ai_model: String,
 }
+
+fn default_true() -> bool { true }
+fn default_auto() -> String { "auto".to_string() }
+fn default_accent() -> String { "blue".to_string() }
+fn default_ai_provider() -> String { "openai".to_string() }
+fn default_ai_endpoint() -> String { "https://api.openai.com/v1".to_string() }
+fn default_ai_model() -> String { "gpt-4o-mini".to_string() }
 
 impl Default for AppSettings {
     fn default() -> Self {
@@ -22,6 +45,14 @@ impl Default for AppSettings {
             ram_threshold: 80.0,
             cooldown_minutes: 15,
             desktop_notifications: true,
+            hardware_acceleration: true,
+            graphics_renderer: "auto".to_string(),
+            accent_color: "blue".to_string(),
+            disabled_tabs: Vec::new(),
+            ai_provider: "openai".to_string(),
+            ai_endpoint: "https://api.openai.com/v1".to_string(),
+            ai_api_key: String::new(),
+            ai_model: "gpt-4o-mini".to_string(),
         }
     }
 }

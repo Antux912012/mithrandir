@@ -316,11 +316,18 @@ fn test_app_settings_default_and_roundtrip() {
     assert_eq!(defaults.ram_threshold, 80.0);
     assert_eq!(defaults.cooldown_minutes, 15);
     assert!(defaults.desktop_notifications);
+    assert!(defaults.hardware_acceleration);
+    assert_eq!(defaults.graphics_renderer, "auto");
+    assert_eq!(defaults.accent_color, "blue");
+    assert!(defaults.disabled_tabs.is_empty());
+    assert_eq!(defaults.ai_provider, "openai");
 
     let serialized = serde_json::to_string(&defaults).expect("Serialization failed");
     let deserialized: AppSettings = serde_json::from_str(&serialized).expect("Deserialization failed");
     assert_eq!(deserialized.ram_threshold, 80.0);
     assert_eq!(deserialized.cooldown_minutes, 15);
+    assert!(deserialized.hardware_acceleration);
+    assert_eq!(deserialized.accent_color, "blue");
 }
 
 #[test]

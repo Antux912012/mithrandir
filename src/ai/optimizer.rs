@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::ai::client::AIClient;
-use crate::ai::local_llm::ChatMessage;
+use crate::ai::client::{AIClient, ChatMessage};
 use crate::ai::safety::SafetyGuard;
 use crate::backend::cleaner::CleanerEngine;
 use crate::backend::host_bridge::HostBridge;

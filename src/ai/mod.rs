@@ -1,12 +1,11 @@
 pub mod safety;
-pub mod local_llm;
+pub mod agent_bridge;
+pub mod local_servers;
 pub mod client;
 pub mod optimizer;
 
 pub use safety::SafetyGuard;
-pub use local_llm::{
-    BuiltinLinuxAssistant, ChatMessage, GgufModelInfo, LlamaCppStatus, LocalLLMManager,
-    get_recommended_nemotron_models,
-};
-pub use client::{AIClient, ChatResponse};
+pub use agent_bridge::{LocalAgentBridge, LocalAgentStatus};
+pub use local_servers::{LocalServerDetector, LocalServerStatus};
+pub use client::{AIClient, ChatMessage, ChatResponse};
 pub use optimizer::{AIOptimizerEngine, OptimizationRecommendation, OptimizationReport};

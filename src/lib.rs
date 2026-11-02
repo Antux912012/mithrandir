@@ -10,9 +10,9 @@ pub mod ai;
 pub mod ui;
 
 pub use ai::{
-    AIClient, AIOptimizerEngine, BuiltinLinuxAssistant, ChatMessage, ChatResponse,
-    GgufModelInfo, LlamaCppStatus, LocalLLMManager, OptimizationRecommendation,
-    OptimizationReport, SafetyGuard, get_recommended_nemotron_models,
+    AIClient, AIOptimizerEngine, ChatMessage, ChatResponse, LocalAgentBridge,
+    LocalAgentStatus, LocalServerDetector, LocalServerStatus, OptimizationRecommendation,
+    OptimizationReport, SafetyGuard,
 };
 
 pub use tray::{MithrandirTray, TrayAction};
@@ -32,7 +32,7 @@ pub use cleaners::{
 
 pub use backend::{
     AppSettings, AutostartManager, BackgroundDaemon, BatteryInfo, BtrfsManager, CleanCategory,
-    CleanerEngine, DiagnosticsCollector, DistroDetector, DistroFamily, GrubManager,
-    HostBridge, NotificationManager, PackageManager, ProcessManager, ServiceManager,
-    SmartBoostEngine, SystemMonitor,
+    CleanerEngine, DiagnosticsCollector, DistroDetector, DistroFamily, GraphicsCapabilities,
+    GraphicsManager, GrubManager, HostBridge, NotificationManager, PackageManager, ProcessManager,
+    ServiceManager, SmartBoostEngine, SystemMonitor,
 };
