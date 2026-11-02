@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.0.0-brightgreen.svg" alt="Version" /></a>
+  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.0.1-brightgreen.svg" alt="Version" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later" /></a>
   <a href="https://gtk.org/"><img src="https://img.shields.io/badge/GUI-GTK%204%20%7C%20Libadwaita-brightgreen.svg" alt="GTK4 & Libadwaita" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.80%2B-informational.svg" alt="Rust 1.80+" /></a>
@@ -40,6 +40,10 @@
 | 🧹 Multi-Category Deep Cache Cleaner | 📦 Multi-Backend Package Uninstaller |
 | :---: | :---: |
 | ![Cleaner](data/screenshots/03-cleaner.png) | ![Uninstaller](data/screenshots/04-uninstaller.png) |
+
+| 🤖 Multi-Provider AI Optimizer & Agents | ⚙️ GNOME 47 Accent Colors & Acceleration |
+| :---: | :---: |
+| ![AI Optimizer](data/screenshots/06-ai-optimizer.png) | ![Preferences](data/screenshots/07-preferences.png) |
 
 <p align="center">
   <img src="data/screenshots/05-grub.png" width="90%" alt="GRUB Bootloader Configuration" />
@@ -95,18 +99,18 @@ Pre-built standalone packages are ready in the repository root:
 ### AppImage (`.AppImage`)
 Run instantly on any modern GNU/Linux distribution:
 ```bash
-chmod +x ./mithrandir-1.0.0-x86_64.AppImage
-./mithrandir-1.0.0-x86_64.AppImage
+chmod +x ./mithrandir-1.0.1-x86_64.AppImage
+./mithrandir-1.0.1-x86_64.AppImage
 ```
 
 ### Flatpak Bundle (`.flatpak`)
 Install the sandboxed single-file bundle:
 ```bash
-flatpak install --user mithrandir_1.0.0.flatpak
+flatpak install --user mithrandir_1.0.1.flatpak
 ```
 Run via Flatpak:
 ```bash
-flatpak run io.github.antonio.Mithrandir
+flatpak run io.github.antux912012.Mithrandir
 ```
 
 ### Arch Linux / CachyOS (AUR)

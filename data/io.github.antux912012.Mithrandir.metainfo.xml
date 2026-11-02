@@ -64,6 +64,14 @@
       <image width="1416" height="939">https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/05-grub.png</image>
       <caption>GRUB bootloader kernel parameters and timeout management</caption>
     </screenshot>
+    <screenshot>
+      <image width="1173" height="690">https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/06-ai-optimizer.png</image>
+      <caption>AI Optimizer connecting to cloud APIs, local agent sessions, and local LLM runners</caption>
+    </screenshot>
+    <screenshot>
+      <image width="730" height="590">https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/07-preferences.png</image>
+      <caption>Preferences dialog with GNOME 47 accent colors, hardware acceleration, and tab visibility</caption>
+    </screenshot>
   </screenshots>
   <url type="homepage">https://github.com/Antux912012/mithrandir</url>
   <url type="bugtracker">https://github.com/Antux912012/mithrandir/issues</url>
