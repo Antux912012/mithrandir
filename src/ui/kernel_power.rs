@@ -117,7 +117,7 @@ impl KernelPowerPage {
         // Host Kernel Info Row
         let kinfo_row = ActionRow::builder()
             .title("Kernel Release")
-            .subtitle(&format!(
+            .subtitle(format!(
                 "{} ({})",
                 kinfo.kernel_release,
                 if kinfo.is_cachyos { "CachyOS Optimized" } else { "Standard Linux" }

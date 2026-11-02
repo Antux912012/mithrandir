@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sysinfo::{ProcessesToUpdate, System};
+use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System};
 use crate::backend::host_bridge::HostBridge;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,7 +55,11 @@ impl ProcessManager {
         }
 
         // Sysinfo fallback
-        let mut sys = System::new_all();
+        let mut sys = System::new_with_specifics(
+            RefreshKind::nothing()
+                .with_processes(ProcessRefreshKind::everything())
+                .with_memory(MemoryRefreshKind::everything()),
+        );
         sys.refresh_processes(ProcessesToUpdate::All, true);
         sys.refresh_memory();
 

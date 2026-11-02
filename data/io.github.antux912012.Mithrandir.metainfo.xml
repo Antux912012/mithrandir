@@ -62,6 +62,18 @@
   </branding>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="1.0.1" date="2026-11-02">
+      <description>
+        <p>Mithrandir v1.0.1 Maintenance &amp; Optimization Release:</p>
+        <ul>
+          <li>Codebase deduplication: unified host command execution via HostBridge across Flatpak and bare metal.</li>
+          <li>Purged dormant ClamAV remnants and unused settings fields.</li>
+          <li>Resolved asynchronous channel dispatch in GRUB bootloader manager.</li>
+          <li>Eliminated redundant heap allocations in telemetry loops and static mutex locks.</li>
+          <li>Targeted process collection reducing sysinfo overhead and memory consumption.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.0" date="2026-11-02">
       <description>
         <p>Mithrandir v1.0.0 Official Release — Unified GNU/Linux optimizer, CachyOS BORE and sched-ext manager, safe Flatpak cache cleaner, and hardware power presets.</p>

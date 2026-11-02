@@ -287,7 +287,7 @@ impl MithrandirWindow {
                     .application_name("Mithrandir")
                     .application_icon("io.github.antux912012.Mithrandir")
                     .developer_name("Antux912012")
-                    .version("1.0.0")
+                    .version("1.0.1")
                     .comments("Native Linux System Optimization, Cache Management, CachyOS Scheduler Controller & Hardware Power Manager in Rust (GTK4 & Libadwaita)")
                     .website("https://github.com/Antux912012/mithrandir")
                     .license_type(gtk4::License::Gpl30Only)

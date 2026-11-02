@@ -1,6 +1,6 @@
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use crate::backend::cleaner::CleanerEngine;
@@ -28,23 +28,15 @@ pub struct BoostResult {
 }
 
 static IS_BOOSTING: AtomicBool = AtomicBool::new(false);
-static LAST_AUTO_BOOST: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
-static LAST_TRIGGER: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
-
-fn last_auto_boost_mutex() -> &'static Mutex<Option<Instant>> {
-    LAST_AUTO_BOOST.get_or_init(|| Mutex::new(None))
-}
-
-fn last_trigger_mutex() -> &'static Mutex<Option<Instant>> {
-    LAST_TRIGGER.get_or_init(|| Mutex::new(None))
-}
+static LAST_AUTO_BOOST: Mutex<Option<Instant>> = Mutex::new(None);
+static LAST_TRIGGER: Mutex<Option<Instant>> = Mutex::new(None);
 
 pub struct SmartBoostEngine;
 
 impl SmartBoostEngine {
     /// Enforces a debounce window on manual or tray boost actions. Returns true if allowed.
     pub fn check_debounce(min_interval_ms: u64) -> bool {
-        let mut lock = last_trigger_mutex().lock().unwrap();
+        let mut lock = LAST_TRIGGER.lock().unwrap();
         let now = Instant::now();
         if let Some(last) = *lock {
             if now.duration_since(last) < Duration::from_millis(min_interval_ms) {
@@ -147,7 +139,7 @@ impl SmartBoostEngine {
         let cooldown = Duration::from_secs(cooldown_minutes * 60);
 
         {
-            let lock = last_auto_boost_mutex().lock().unwrap();
+            let lock = LAST_AUTO_BOOST.lock().unwrap();
             if let Some(last) = *lock {
                 if now.duration_since(last) < cooldown {
                     return None;
@@ -160,7 +152,7 @@ impl SmartBoostEngine {
         let temp_exceeded = status.temp_size_mb >= temp_threshold_mb;
 
         if ram_exceeded || temp_exceeded {
-            *last_auto_boost_mutex().lock().unwrap() = Some(now);
+            *LAST_AUTO_BOOST.lock().unwrap() = Some(now);
             let res = Self::execute_boost(temp_exceeded, ram_exceeded);
             if !res.already_running {
                 return Some(res);

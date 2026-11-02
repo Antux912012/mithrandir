@@ -56,8 +56,7 @@ impl PowerManager {
             }
         }
 
-        let cached = POWER_SAVER_STATE.load(Ordering::SeqCst);
-        cached
+        POWER_SAVER_STATE.load(Ordering::SeqCst)
     }
 
     /// Updates internal cached power saver flag.

@@ -79,21 +79,23 @@ impl CleanerEngine {
             .reduce(|| (0, 0), |(s1, c1), (s2, c2)| (s1 + s2, c1 + c2))
     }
 
+    pub const PKG_CACHE_DIRS: &'static [&'static str] = &[
+        "/var/cache/libdnf5",
+        "/var/cache/dnf",
+        "/var/cache/apt/archives",
+        "/var/cache/pacman/pkg",
+    ];
+
     pub fn get_categories() -> Vec<CleanCategory> {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
         let home_p = PathBuf::from(&home);
 
-        let pkg_cache_path = if Path::new("/var/cache/libdnf5").exists() {
-            PathBuf::from("/var/cache/libdnf5")
-        } else if Path::new("/var/cache/dnf").exists() {
-            PathBuf::from("/var/cache/dnf")
-        } else if Path::new("/var/cache/apt/archives").exists() {
-            PathBuf::from("/var/cache/apt/archives")
-        } else if Path::new("/var/cache/pacman/pkg").exists() {
-            PathBuf::from("/var/cache/pacman/pkg")
-        } else {
-            PathBuf::from("/var/cache")
-        };
+        let pkg_cache_path = Self::PKG_CACHE_DIRS
+            .iter()
+            .map(Path::new)
+            .find(|p| p.exists())
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("/var/cache"));
 
         let cats = [
             ("thumbnails", "Thumbnail Cache", "Cached image and video thumbnails", home_p.join(".cache/thumbnails")),
@@ -131,7 +133,7 @@ impl CleanerEngine {
                 } else if id == "package_cache" {
                     let mut total_s = 0;
                     let mut total_c = 0;
-                    for p in &["/var/cache/libdnf5", "/var/cache/dnf", "/var/cache/apt/archives", "/var/cache/pacman/pkg"] {
+                    for p in Self::PKG_CACHE_DIRS {
                         let pb = Path::new(p);
                         if pb.exists() {
                             let (s, c) = Self::scan_path(pb);

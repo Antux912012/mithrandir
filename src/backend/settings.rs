@@ -11,8 +11,6 @@ pub struct AppSettings {
     pub ram_threshold: f64,
     pub cooldown_minutes: u64,
     pub desktop_notifications: bool,
-    pub auto_freshclam: bool,
-    pub stale_hours_threshold: u64,
 }
 
 impl Default for AppSettings {
@@ -24,8 +22,6 @@ impl Default for AppSettings {
             ram_threshold: 80.0,
             cooldown_minutes: 15,
             desktop_notifications: true,
-            auto_freshclam: false,
-            stale_hours_threshold: 24,
         }
     }
 }

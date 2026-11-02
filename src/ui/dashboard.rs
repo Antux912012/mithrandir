@@ -111,7 +111,7 @@ impl MetricTile {
 }
 
 thread_local! {
-    static POWER_SWITCH_ROW: std::cell::RefCell<Option<SwitchRow>> = std::cell::RefCell::new(None);
+    static POWER_SWITCH_ROW: std::cell::RefCell<Option<SwitchRow>> = const { std::cell::RefCell::new(None) };
 }
 
 pub struct DashboardPage;
@@ -420,7 +420,7 @@ impl DashboardPage {
 
         let kernel_row = ActionRow::builder()
             .title("Kernel &amp; CPU Scheduler")
-            .subtitle(&format!("Release: {} | {}", kinfo.kernel_release, sched_name))
+            .subtitle(format!("Release: {} | {}", kinfo.kernel_release, sched_name))
             .build();
         kernel_row.add_prefix(&Image::from_icon_name("cpu-symbolic"));
         power_group.add(&kernel_row);

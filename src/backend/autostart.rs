@@ -23,11 +23,18 @@ impl AutostartManager {
     }
 
     pub fn is_mithrandir_autostart_enabled() -> bool {
-        let path = Self::get_user_autostart_dir().join("io.github.antonio.Mithrandir.desktop");
-        if !path.exists() {
+        let dir = Self::get_user_autostart_dir();
+        let path = dir.join("io.github.antux912012.Mithrandir.desktop");
+        let legacy_path = dir.join("io.github.antonio.Mithrandir.desktop");
+        let active_path = if path.exists() {
+            path
+        } else if legacy_path.exists() {
+            legacy_path
+        } else {
             return false;
-        }
-        if let Ok(content) = fs::read_to_string(&path) {
+        };
+
+        if let Ok(content) = fs::read_to_string(&active_path) {
             for line in content.lines() {
                 if line.trim() == "Hidden=true" || line.trim() == "X-GNOME-Autostart-enabled=false" {
                     return false;
@@ -42,22 +49,29 @@ impl AutostartManager {
     pub fn set_mithrandir_autostart(enabled: bool) -> Result<(), String> {
         let dir = Self::get_user_autostart_dir();
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let path = dir.join("io.github.antonio.Mithrandir.desktop");
+        let path = dir.join("io.github.antux912012.Mithrandir.desktop");
+        let legacy_path = dir.join("io.github.antonio.Mithrandir.desktop");
 
         if enabled {
             let content = "[Desktop Entry]\n\
                            Type=Application\n\
-                           Name=Mithrandir-RS\n\
-                           Comment=Start Mithrandir-RS in background on login\n\
-                           Exec=mithrandir-rs --keep-alive\n\
-                           Icon=io.github.antonio.Mithrandir\n\
+                           Name=Mithrandir\n\
+                           Comment=Start Mithrandir in background on login\n\
+                           Exec=mithrandir --keep-alive\n\
+                           Icon=io.github.antux912012.Mithrandir\n\
                            Terminal=false\n\
                            Hidden=false\n\
                            X-GNOME-Autostart-enabled=true\n";
             fs::write(path, content).map_err(|e| e.to_string())?;
+            if legacy_path.exists() {
+                let _ = fs::remove_file(legacy_path);
+            }
         } else {
             if path.exists() {
                 let _ = fs::remove_file(path);
+            }
+            if legacy_path.exists() {
+                let _ = fs::remove_file(legacy_path);
             }
         }
         Ok(())

@@ -117,7 +117,7 @@ impl GrubPage {
 
             std::thread::spawn(move || {
                 let res = GrubManager::save_and_update(timeout, &def);
-                let _ = tx.send(res);
+                let _ = tx.send_blocking(res);
             });
         });
 

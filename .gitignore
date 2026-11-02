@@ -4,3 +4,5 @@
 build-dir-rs/
 repo-rs/
 pkg-deb/usr/
+*.flatpak
+*.AppImage
