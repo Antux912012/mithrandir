@@ -2,18 +2,17 @@
 set -euo pipefail
 
 ENV_FILE="${HOME}/.env"
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
-if [ ! -f "${ENV_FILE}" ]; then
-  echo "Error: ~/.env file not found."
-  echo "Please store your token first using the provided command."
-  exit 1
+if [ -z "${GITHUB_TOKEN}" ] && [ -f "${ENV_FILE}" ]; then
+  # Extract GITHUB_TOKEN safely without printing
+  GITHUB_TOKEN=$(grep -E "^GITHUB_TOKEN=" "${ENV_FILE}" | cut -d'=' -f2- | tr -d '\r\n"')
 fi
 
-# Extract GITHUB_TOKEN safely without printing
-GITHUB_TOKEN=$(grep -E "^GITHUB_TOKEN=" "${ENV_FILE}" | cut -d'=' -f2- | tr -d '\r\n"')
-
 if [ -z "${GITHUB_TOKEN}" ]; then
-  echo "Error: GITHUB_TOKEN not found in ~/.env."
+  echo "Error: GITHUB_TOKEN not found."
+  echo "Please set GITHUB_TOKEN in your environment or store it in ~/.env with:"
+  echo "  echo 'GITHUB_TOKEN=your_token_here' >> ~/.env"
   exit 1
 fi
 
@@ -67,9 +66,10 @@ else
   git remote add origin "${REMOTE_URL}"
 fi
 
-echo "==> Pushing 'main' branch to ${REMOTE_URL}..."
+echo "==> Pushing 'main' branch and tags to ${REMOTE_URL}..."
 # Use in-memory credential push to prevent storing token in .git/config
 git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${USER_LOGIN}/${REPO_NAME}.git" main:main -u
+git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${USER_LOGIN}/${REPO_NAME}.git" --tags -f
 git config branch.main.remote origin
 git fetch origin
 
