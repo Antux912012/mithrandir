@@ -11,6 +11,7 @@ use adw::{
 };
 use std::cell::Cell;
 use std::rc::Rc;
+use crate::ui::ai::AIPage;
 use crate::ui::autostart::AutostartPage;
 use crate::ui::btrfs::BtrfsPage;
 use crate::ui::cleaner::CleanerPage;
@@ -93,6 +94,7 @@ impl MithrandirWindow {
 
         let page_dashboard = DashboardPage::build(Some(toast_overlay.clone()));
         let page_kernel_power = KernelPowerPage::build(Some(toast_overlay.clone()));
+        let page_ai = AIPage::build(Some(toast_overlay.clone()));
         let page_cleaner = CleanerPage::build();
         let page_processes = ProcessesPage::build();
         let page_services = ServicesPage::build();
@@ -103,6 +105,7 @@ impl MithrandirWindow {
 
         stack.add_titled(&page_dashboard, Some("dashboard"), "Dashboard");
         stack.add_titled(&page_kernel_power, Some("kernel_power"), "Kernel & Power");
+        stack.add_titled(&page_ai, Some("ai"), "AI Optimizer");
         stack.add_titled(&page_cleaner, Some("cleaner"), "Cleaner");
         stack.add_titled(&page_processes, Some("processes"), "Processes");
         stack.add_titled(&page_services, Some("services"), "Services");
@@ -114,6 +117,7 @@ impl MithrandirWindow {
         let pages = [
             ("dashboard", "Dashboard", "utilities-system-monitor-symbolic"),
             ("kernel_power", "Kernel & Power", "speedometer-symbolic"),
+            ("ai", "AI Optimizer", "starred-symbolic"),
             ("cleaner", "Cleaner", "edit-clear-all-symbolic"),
             ("processes", "Processes", "view-list-bullet-symbolic"),
             ("services", "Services", "emblem-system-symbolic"),

@@ -116,6 +116,23 @@ fn main() {
         return;
     }
 
+    if args.iter().any(|a| a == "--ai-optimize" || a == "--triage") {
+        println!("🧠 Running Mithrandir AI System Optimizer (Nemotron)...");
+        let report = mithrandir::AIOptimizerEngine::run_heuristic_optimization();
+        println!("  CPU:      {}", report.cpu_summary);
+        println!("  Memory:   {}", report.memory_summary);
+        println!("  Kernel:   {}", report.kernel_summary);
+        println!("  Storage:  {}", report.storage_summary);
+        println!("\n📋 Recommendations:");
+        for rec in &report.recommendations {
+            println!("  [{}] {}: {}", rec.category, rec.title, rec.description);
+            if let Some(ref cmd) = rec.proposed_command {
+                println!("    Fix: {}", cmd);
+            }
+        }
+        return;
+    }
+
     #[cfg(feature = "gui")]
     {
         use libadwaita as adw;

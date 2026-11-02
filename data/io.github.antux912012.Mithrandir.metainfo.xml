@@ -66,6 +66,7 @@
       <description>
         <p>Mithrandir v1.0.1 Maintenance &amp; Optimization Release:</p>
         <ul>
+          <li>AI System Optimizer: real-time GNU/Linux tuning powered by NVIDIA Nemotron 3.5 Bolt E4B with DFlash speculative decoding.</li>
           <li>Codebase deduplication: unified host command execution via HostBridge across Flatpak and bare metal.</li>
           <li>Purged dormant ClamAV remnants and unused settings fields.</li>
           <li>Resolved asynchronous channel dispatch in GRUB bootloader manager.</li>

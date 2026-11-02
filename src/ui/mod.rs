@@ -1,6 +1,7 @@
 pub mod theme;
 pub mod dashboard;
 pub mod kernel_power;
+pub mod ai;
 pub mod cleaner;
 pub mod processes;
 pub mod autostart;
@@ -15,6 +16,7 @@ pub use window::MithrandirWindow;
 pub use theme::ThemeManager;
 pub use dashboard::DashboardPage;
 pub use kernel_power::KernelPowerPage;
+pub use ai::AIPage;
 pub use cleaner::CleanerPage;
 pub use processes::ProcessesPage;
 pub use autostart::AutostartPage;

@@ -4,9 +4,16 @@ pub mod tray;
 pub mod power;
 pub mod kernel;
 pub mod os_info;
+pub mod ai;
 
 #[cfg(feature = "gui")]
 pub mod ui;
+
+pub use ai::{
+    AIClient, AIOptimizerEngine, BuiltinLinuxAssistant, ChatMessage, ChatResponse,
+    GgufModelInfo, LlamaCppStatus, LocalLLMManager, OptimizationRecommendation,
+    OptimizationReport, SafetyGuard, get_recommended_nemotron_models,
+};
 
 pub use tray::{MithrandirTray, TrayAction};
 pub use power::{
