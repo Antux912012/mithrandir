@@ -3,9 +3,9 @@ use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::Path;
 use tempfile::tempdir;
-use mithrandir_rs::{
-    clean_flatpak_cache, clean_flatpak_cache_with_running, is_protected_path,
-    scan_flatpak_cache,
+use mithrandir::{
+    clean_flatpak_app_cache, clean_flatpak_cache, clean_flatpak_cache_with_running,
+    is_safe_flatpak_cache_path, scan_flatpak_cache,
 };
 
 #[test]
@@ -13,11 +13,6 @@ fn test_flatpak_safe_cleaning_preserves_zen_and_profiles() {
     let temp = tempdir().expect("Failed to create temporary directory");
     let var_app = temp.path();
 
-    // Mock Zen Browser structure:
-    // ~/.var/app/app.zen_browser.zen/.zen/Default (release)/prefs.js
-    // ~/.var/app/app.zen_browser.zen/.zen/Default (release)/zen-sessions.jsonlz4
-    // ~/.var/app/app.zen_browser.zen/.zen/Default (release)/places.sqlite
-    // ~/.var/app/app.zen_browser.zen/cache/zen/Default (release)/cache2/entries/dummy_cache.bin
     let zen_app_dir = var_app.join("app.zen_browser.zen");
     let zen_profile_dir = zen_app_dir.join(".zen/Default (release)");
     fs::create_dir_all(&zen_profile_dir).expect("Failed to create mock .zen directory");
@@ -86,6 +81,68 @@ fn test_flatpak_safe_cleaning_preserves_zen_and_profiles() {
     // 4. Misplaced protected files & directories inside cache MUST be preserved
     assert!(misplaced_db.exists(), "cookies.sqlite in cache must be preserved by signature filter");
     assert!(backup_file.exists(), "bookmarkbackups in cache must be preserved by directory filter");
+
+    // 5. The cache directory itself MUST still exist!
+    assert!(cache_dir.exists(), "The cache directory node itself must not be deleted");
+}
+
+#[test]
+fn test_flatpak_never_touches_config_data_or_local_state() {
+    let temp = tempdir().expect("Failed to create tempdir");
+    let app_dir = temp.path().join("org.mozilla.Firefox");
+
+    // Flatpak XDG Directory hierarchy
+    let cache_dir = app_dir.join("cache");
+    let config_dir = app_dir.join("config");
+    let data_dir = app_dir.join("data");
+    let state_dir = app_dir.join(".local/state");
+    let custom_persist_dir = app_dir.join(".pki");
+
+    fs::create_dir_all(&cache_dir).unwrap();
+    fs::create_dir_all(&config_dir).unwrap();
+    fs::create_dir_all(&data_dir).unwrap();
+    fs::create_dir_all(&state_dir).unwrap();
+    fs::create_dir_all(&custom_persist_dir).unwrap();
+
+    // Critical persistent files
+    let config_file = config_dir.join("user-settings.json");
+    fs::write(&config_file, b"{\"theme\": \"nord\", \"vault\": true}").unwrap();
+
+    let data_file = data_dir.join("accounts.db");
+    fs::write(&data_file, b"critical_credentials_db").unwrap();
+
+    let state_file = state_dir.join("window-state.v1");
+    fs::write(&state_file, b"x=10,y=20").unwrap();
+
+    let custom_file = custom_persist_dir.join("cert.db");
+    fs::write(&custom_file, b"crypto_key_cert").unwrap();
+
+    // Non-protected cache file
+    let cache_file = cache_dir.join("fontconfig-cache.bin");
+    fs::write(&cache_file, b"temporary_fontconfig_cache").unwrap();
+
+    // Execute app cache clean
+    let res = clean_flatpak_app_cache(&app_dir);
+    assert!(res.is_ok());
+
+    let (freed_bytes, freed_count) = res.unwrap();
+    assert_eq!(freed_count, 1, "Only fontconfig-cache.bin must be cleaned");
+    assert_eq!(freed_bytes, b"temporary_fontconfig_cache".len() as u64);
+
+    // Verify cache file deleted, but cache directory node remains
+    assert!(!cache_file.exists());
+    assert!(cache_dir.exists(), "cache directory must remain present");
+
+    // Verify all protected XDG dirs and files remain untouched
+    assert!(config_file.exists(), "config file MUST NEVER be touched");
+    assert!(data_file.exists(), "data file MUST NEVER be touched");
+    assert!(state_file.exists(), ".local/state file MUST NEVER be touched");
+    assert!(custom_file.exists(), "custom persist dir MUST NEVER be touched");
+
+    assert_eq!(fs::read(&config_file).unwrap(), b"{\"theme\": \"nord\", \"vault\": true}");
+    assert_eq!(fs::read(&data_file).unwrap(), b"critical_credentials_db");
+    assert_eq!(fs::read(&state_file).unwrap(), b"x=10,y=20");
+    assert_eq!(fs::read(&custom_file).unwrap(), b"crypto_key_cert");
 }
 
 #[test]
@@ -109,33 +166,24 @@ fn test_flatpak_skip_running_application() {
 }
 
 #[test]
-fn test_is_protected_path_predicates() {
-    let cache_root = Path::new("/home/user/.var/app/app.zen_browser.zen/cache");
+fn test_is_safe_flatpak_cache_path() {
+    let cache_root = Path::new("/home/user/.var/app/org.mozilla.firefox/cache");
 
-    // Root is protected
-    assert!(is_protected_path(cache_root, cache_root));
+    // Root itself is NOT safe to delete
+    assert!(!is_safe_flatpak_cache_path(cache_root, cache_root));
 
-    // Protected filenames
-    assert!(is_protected_path(&cache_root.join("prefs.js"), cache_root));
-    assert!(is_protected_path(&cache_root.join("user.js"), cache_root));
-    assert!(is_protected_path(&cache_root.join("logins.json"), cache_root));
-    assert!(is_protected_path(&cache_root.join("lock"), cache_root));
+    // Paths outside cache root
+    assert!(!is_safe_flatpak_cache_path(Path::new("/home/user/.var/app/org.mozilla.firefox/config"), cache_root));
+    assert!(!is_safe_flatpak_cache_path(Path::new("/home/user/.var/app/org.mozilla.firefox/data"), cache_root));
+    assert!(!is_safe_flatpak_cache_path(Path::new("/home/user/.var/app/org.mozilla.firefox/.local/state"), cache_root));
+    assert!(!is_safe_flatpak_cache_path(Path::new("/home/user/.var/app/org.mozilla.firefox"), cache_root));
 
-    // Protected extensions
-    assert!(is_protected_path(&cache_root.join("history.sqlite"), cache_root));
-    assert!(is_protected_path(&cache_root.join("history.sqlite-wal"), cache_root));
-    assert!(is_protected_path(&cache_root.join("session.jsonlz4"), cache_root));
-    assert!(is_protected_path(&cache_root.join("config.ini"), cache_root));
-    assert!(is_protected_path(&cache_root.join("profiles.ini"), cache_root));
+    // Normal volatile cache file inside cache root
+    assert!(is_safe_flatpak_cache_path(&cache_root.join("mesa_shader_cache.bin"), cache_root));
+    assert!(is_safe_flatpak_cache_path(&cache_root.join("thumbnails/normal/icon.png"), cache_root));
 
-    // Protected directories
-    assert!(is_protected_path(&cache_root.join("bookmarkbackups/data.bin"), cache_root));
-    assert!(is_protected_path(&cache_root.join("zen-sessions-backup/session.bak"), cache_root));
-    assert!(is_protected_path(&cache_root.join("extensions/my-addon"), cache_root));
-    assert!(is_protected_path(&cache_root.join("chrome/userChrome.css"), cache_root));
-
-    // Non-protected cache files
-    assert!(!is_protected_path(&cache_root.join("cache2/entries/001A2B"), cache_root));
-    assert!(!is_protected_path(&cache_root.join("thumbnails/image.jpg"), cache_root));
-    assert!(!is_protected_path(&cache_root.join("shader_cache.bin"), cache_root));
+    // Protected signatures inside cache root
+    assert!(!is_safe_flatpak_cache_path(&cache_root.join("cookies.sqlite"), cache_root));
+    assert!(!is_safe_flatpak_cache_path(&cache_root.join("prefs.js"), cache_root));
+    assert!(!is_safe_flatpak_cache_path(&cache_root.join("bookmarkbackups/data.bin"), cache_root));
 }

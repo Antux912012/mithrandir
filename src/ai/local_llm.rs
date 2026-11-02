@@ -87,7 +87,7 @@ impl LocalLLMManager {
 
     pub fn app_data_dir() -> PathBuf {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-        PathBuf::from(home).join(".local/share/io.github.antonio.MithrandirRS/llm")
+        PathBuf::from(home).join(".local/share/io.github.antonio.Mithrandir/llm")
     }
 
     pub fn bin_dir() -> PathBuf {

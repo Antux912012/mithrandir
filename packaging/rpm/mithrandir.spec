@@ -34,9 +34,9 @@ mkdir -p %{buildroot}%{_datadir}/icons/hicolor
 mkdir -p %{buildroot}%{_prefix}/lib/udev/rules.d
 
 install -m 755 %{_sourcedir}/mithrandir-rs %{buildroot}%{_bindir}/mithrandir-rs
-install -m 644 %{_sourcedir}/data/io.github.antonio.MithrandirRS.desktop %{buildroot}%{_datadir}/applications/io.github.antonio.MithrandirRS.desktop
-install -m 644 %{_sourcedir}/data/io.github.antonio.MithrandirRS.gschema.xml %{buildroot}%{_datadir}/glib-2.0/schemas/io.github.antonio.MithrandirRS.gschema.xml
-install -m 644 %{_sourcedir}/data/io.github.antonio.MithrandirRS.metainfo.xml %{buildroot}%{_datadir}/metainfo/io.github.antonio.MithrandirRS.metainfo.xml
+install -m 644 %{_sourcedir}/data/io.github.antonio.Mithrandir.desktop %{buildroot}%{_datadir}/applications/io.github.antonio.Mithrandir.desktop
+install -m 644 %{_sourcedir}/data/io.github.antonio.Mithrandir.gschema.xml %{buildroot}%{_datadir}/glib-2.0/schemas/io.github.antonio.Mithrandir.gschema.xml
+install -m 644 %{_sourcedir}/data/io.github.antonio.Mithrandir.metainfo.xml %{buildroot}%{_datadir}/metainfo/io.github.antonio.Mithrandir.metainfo.xml
 install -m 644 %{_sourcedir}/data/99-mithrandir-power.rules %{buildroot}%{_prefix}/lib/udev/rules.d/99-mithrandir-power.rules
 cp -r %{_sourcedir}/data/icons/hicolor/* %{buildroot}%{_datadir}/icons/hicolor/
 
@@ -55,9 +55,9 @@ echo "==> Launch with 'mithrandir-rs' or start in system tray with 'mithrandir-r
 
 %files
 %{_bindir}/mithrandir-rs
-%{_datadir}/applications/io.github.antonio.MithrandirRS.desktop
-%{_datadir}/glib-2.0/schemas/io.github.antonio.MithrandirRS.gschema.xml
-%{_datadir}/metainfo/io.github.antonio.MithrandirRS.metainfo.xml
+%{_datadir}/applications/io.github.antonio.Mithrandir.desktop
+%{_datadir}/glib-2.0/schemas/io.github.antonio.Mithrandir.gschema.xml
+%{_datadir}/metainfo/io.github.antonio.Mithrandir.metainfo.xml
 %{_prefix}/lib/udev/rules.d/99-mithrandir-power.rules
 %{_datadir}/icons/hicolor/*/*/*.*
 

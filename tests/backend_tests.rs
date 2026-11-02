@@ -1,4 +1,4 @@
-use mithrandir_rs::{
+use mithrandir::{
     AIClient, AntivirusEngine, BuiltinLinuxAssistant, ChatMessage, CleanerEngine,
     DiagnosticsCollector, DistroDetector, LocalLLMManager, SafetyGuard, SmartBoostEngine,
     SystemMonitor, get_recommended_qwen_models,
@@ -234,7 +234,7 @@ fn test_quarantine_vault_cycle() {
 
 #[test]
 fn test_tray_action_channel_dispatch() {
-    use mithrandir_rs::{MithrandirTray, TrayAction};
+    use mithrandir::{MithrandirTray, TrayAction};
     use ksni::Tray;
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
@@ -243,7 +243,7 @@ fn test_tray_action_channel_dispatch() {
     let power_saver_arc = Arc::new(AtomicBool::new(false));
     let mut tray = MithrandirTray::new(tx, power_saver_arc.clone());
 
-    assert_eq!(tray.id(), "mithrandir-rs");
+    assert_eq!(tray.id(), "mithrandir");
     assert_eq!(tray.icon_name(), "mithrandir-status-symbolic");
     assert_eq!(tray.category(), ksni::Category::SystemServices);
 
@@ -257,9 +257,9 @@ fn test_tray_action_channel_dispatch() {
     tray.activate(100, 200);
     assert_eq!(rx.try_recv(), Ok(TrayAction::OpenMithrandir));
 
-    // Test menu item activation: RunSmartboost, Checkmark(Battery Power Saver), Separator, OpenMithrandir, Separator, QuitMithrandir
+    // Test menu item activation: RunSmartboost, Checkmark(Battery Power Saver), SubMenu(Kernel & Power), Separator, OpenMithrandir, Separator, QuitMithrandir
     let menu_items = tray.menu();
-    assert_eq!(menu_items.len(), 6);
+    assert_eq!(menu_items.len(), 7);
 
     // 0: Run Smartboost
     if let ksni::MenuItem::Standard(item) = &menu_items[0] {
@@ -281,8 +281,16 @@ fn test_tray_action_channel_dispatch() {
         panic!("Expected CheckmarkItem for Battery Power Saver");
     }
 
-    // 3: Open Mithrandir
-    if let ksni::MenuItem::Standard(item) = &menu_items[3] {
+    // 2: Kernel & Power (SubMenu)
+    if let ksni::MenuItem::SubMenu(sub) = &menu_items[2] {
+        assert_eq!(sub.label, "Kernel & Power");
+        assert!(sub.submenu.len() >= 5);
+    } else {
+        panic!("Expected SubMenu for Kernel & Power");
+    }
+
+    // 4: Open Mithrandir
+    if let ksni::MenuItem::Standard(item) = &menu_items[4] {
         assert_eq!(item.label, "Open Mithrandir");
         (item.activate)(&mut tray);
         assert_eq!(rx.try_recv(), Ok(TrayAction::OpenMithrandir));
@@ -290,8 +298,8 @@ fn test_tray_action_channel_dispatch() {
         panic!("Expected StandardItem for Open Mithrandir");
     }
 
-    // 5: Quit Mithrandir
-    if let ksni::MenuItem::Standard(item) = &menu_items[5] {
+    // 6: Quit Mithrandir
+    if let ksni::MenuItem::Standard(item) = &menu_items[6] {
         assert_eq!(item.label, "Quit Mithrandir");
         (item.activate)(&mut tray);
         assert_eq!(rx.try_recv(), Ok(TrayAction::QuitMithrandir));
@@ -302,7 +310,7 @@ fn test_tray_action_channel_dispatch() {
 
 #[test]
 fn test_tray_smartboost_concurrency_lock() {
-    use mithrandir_rs::tray::MithrandirTray;
+    use mithrandir::tray::MithrandirTray;
 
     let res = MithrandirTray::execute_tray_smartboost();
     assert!(res.is_some());
@@ -310,7 +318,7 @@ fn test_tray_smartboost_concurrency_lock() {
 
 #[test]
 fn test_power_saver_controller() {
-    use mithrandir_rs::PowerManager;
+    use mithrandir::PowerManager;
 
     let supported = PowerManager::is_supported();
     let is_active = PowerManager::is_power_saver_active();
@@ -327,7 +335,7 @@ fn test_power_saver_controller() {
 
 #[test]
 fn test_distro_detection_mock_matrix() {
-    use mithrandir_rs::os_info::{get_admin_group_for_distro, parse_os_release, LinuxDistro};
+    use mithrandir::os_info::{get_admin_group_for_distro, parse_os_release, LinuxDistro};
 
     let debian_os_release = r#"
 PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
@@ -409,7 +417,7 @@ PRETTY_NAME="Alpine Linux v3.21"
 
 #[test]
 fn test_nixos_immutable_graceful_handling() {
-    use mithrandir_rs::os_info::{generate_udev_rule_for_group, LinuxDistro};
+    use mithrandir::os_info::{generate_udev_rule_for_group, LinuxDistro};
 
     let wheel_rule = generate_udev_rule_for_group("wheel");
     assert!(wheel_rule.contains("chgrp -R wheel"));
@@ -432,7 +440,7 @@ fn test_nixos_immutable_graceful_handling() {
 
 #[test]
 fn test_app_settings_default_and_roundtrip() {
-    use mithrandir_rs::AppSettings;
+    use mithrandir::AppSettings;
 
     let defaults = AppSettings::default();
     assert!(defaults.keep_in_background);
@@ -450,8 +458,8 @@ fn test_app_settings_default_and_roundtrip() {
 
 #[test]
 fn test_distro_family_conversion() {
-    use mithrandir_rs::os_info::LinuxDistro;
-    use mithrandir_rs::DistroFamily;
+    use mithrandir::os_info::LinuxDistro;
+    use mithrandir::DistroFamily;
 
     assert_eq!(DistroFamily::from(LinuxDistro::Debian), DistroFamily::Debian);
     assert_eq!(DistroFamily::from(LinuxDistro::Ubuntu), DistroFamily::Debian);

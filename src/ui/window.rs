@@ -202,7 +202,7 @@ impl MithrandirWindow {
             if let Some(win) = win_weak_about.upgrade() {
                 let about = AboutDialog::builder()
                     .application_name("Mithrandir-RS")
-                    .application_icon("io.github.antonio.MithrandirRS")
+                    .application_icon("io.github.antonio.Mithrandir")
                     .developer_name("Antonio")
                     .version("0.4.4")
                     .comments("Blazing-fast GNU/Linux System Cleaner, Optimizer, Telemetry & Diagnostics in Rust (GTK4 & Libadwaita)")

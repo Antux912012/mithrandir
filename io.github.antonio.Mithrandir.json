@@ -1,9 +1,9 @@
 {
-  "app-id": "io.github.antonio.MithrandirRS",
+  "app-id": "io.github.antonio.Mithrandir",
   "runtime": "org.gnome.Platform",
   "runtime-version": "50",
   "sdk": "org.gnome.Sdk",
-  "command": "mithrandir-rs",
+  "command": "mithrandir",
   "finish-args": [
     "--share=network",
     "--share=ipc",
@@ -17,7 +17,10 @@
     "--talk-name=org.freedesktop.Flatpak",
     "--system-talk-name=org.freedesktop.systemd1",
     "--talk-name=org.freedesktop.secrets",
-    "--talk-name=org.kde.StatusNotifierWatcher"
+    "--talk-name=org.kde.StatusNotifierWatcher",
+    "--system-talk-name=org.scx.Loader",
+    "--system-talk-name=org.freedesktop.UPower.PowerProfiles",
+    "--system-talk-name=net.hadess.PowerProfiles"
   ],
   "cleanup": [
     "/include",
@@ -32,12 +35,12 @@
   ],
   "modules": [
     {
-      "name": "mithrandir-rs",
+      "name": "mithrandir",
       "buildsystem": "simple",
       "build-commands": [
-        "install -Dm755 target/release/mithrandir-rs /app/bin/mithrandir-rs",
-        "install -Dm644 data/io.github.antonio.MithrandirRS.desktop /app/share/applications/io.github.antonio.MithrandirRS.desktop",
-        "install -Dm644 data/io.github.antonio.MithrandirRS.gschema.xml /app/share/glib-2.0/schemas/io.github.antonio.MithrandirRS.gschema.xml",
+        "install -Dm755 target/release/mithrandir /app/bin/mithrandir",
+        "install -Dm644 data/io.github.antonio.Mithrandir.desktop /app/share/applications/io.github.antonio.Mithrandir.desktop",
+        "install -Dm644 data/io.github.antonio.Mithrandir.gschema.xml /app/share/glib-2.0/schemas/io.github.antonio.Mithrandir.gschema.xml",
         "glib-compile-schemas /app/share/glib-2.0/schemas/",
         "mkdir -p /app/share/icons/hicolor",
         "cp -r data/icons/hicolor/* /app/share/icons/hicolor/"

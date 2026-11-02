@@ -46,9 +46,9 @@ sed -i "s/^Version:.*/Version: ${VERSION}/" "${PKG_DIR}/DEBIAN/control"
 install -m 755 "${ROOT_DIR}/packaging/debian/postinst" "${PKG_DIR}/DEBIAN/postinst"
 
 install -m 755 "${ROOT_DIR}/target-debian/release/mithrandir-rs" "${PKG_DIR}/usr/bin/mithrandir-rs"
-install -m 644 "${ROOT_DIR}/data/io.github.antonio.MithrandirRS.desktop" "${PKG_DIR}/usr/share/applications/io.github.antonio.MithrandirRS.desktop"
-install -m 644 "${ROOT_DIR}/data/io.github.antonio.MithrandirRS.gschema.xml" "${PKG_DIR}/usr/share/glib-2.0/schemas/io.github.antonio.MithrandirRS.gschema.xml"
-install -m 644 "${ROOT_DIR}/data/io.github.antonio.MithrandirRS.metainfo.xml" "${PKG_DIR}/usr/share/metainfo/io.github.antonio.MithrandirRS.metainfo.xml"
+install -m 644 "${ROOT_DIR}/data/io.github.antonio.Mithrandir.desktop" "${PKG_DIR}/usr/share/applications/io.github.antonio.Mithrandir.desktop"
+install -m 644 "${ROOT_DIR}/data/io.github.antonio.Mithrandir.gschema.xml" "${PKG_DIR}/usr/share/glib-2.0/schemas/io.github.antonio.Mithrandir.gschema.xml"
+install -m 644 "${ROOT_DIR}/data/io.github.antonio.Mithrandir.metainfo.xml" "${PKG_DIR}/usr/share/metainfo/io.github.antonio.Mithrandir.metainfo.xml"
 install -m 644 "${ROOT_DIR}/data/99-mithrandir-power.rules" "${PKG_DIR}/lib/udev/rules.d/99-mithrandir-power.rules"
 cp -r "${ROOT_DIR}/data/icons/hicolor/"* "${PKG_DIR}/usr/share/icons/hicolor/"
 

@@ -407,6 +407,24 @@ impl DashboardPage {
             *cell.borrow_mut() = Some(power_saver_row.clone());
         });
 
+        let kinfo = crate::kernel::detect_kernel();
+        let sched_name = if kinfo.scx_supported && kinfo.scx_active_scheduler != "none" {
+            format!("sched-ext: {}", kinfo.scx_active_scheduler)
+        } else if kinfo.bore_supported && kinfo.bore_enabled {
+            "BORE (Active)".to_string()
+        } else if kinfo.bore_supported && !kinfo.bore_enabled {
+            "EEVDF (Vanilla)".to_string()
+        } else {
+            "Standard Linux Scheduler".to_string()
+        };
+
+        let kernel_row = ActionRow::builder()
+            .title("Kernel & CPU Scheduler")
+            .subtitle(&format!("Release: {} | {}", kinfo.kernel_release, sched_name))
+            .build();
+        kernel_row.add_prefix(&Image::from_icon_name("cpu-symbolic"));
+        power_group.add(&kernel_row);
+
         power_group.add(&power_saver_row);
         root_box.append(&power_group);
 

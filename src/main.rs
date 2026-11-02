@@ -1,10 +1,83 @@
-use mithrandir_rs::{CleanerEngine, SmartBoostEngine, SystemMonitor};
+use mithrandir::{CleanerEngine, SmartBoostEngine, SystemMonitor};
 #[cfg(feature = "gui")]
-use mithrandir_rs::BackgroundDaemon;
+use mithrandir::BackgroundDaemon;
 use std::env;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+
+    if args.iter().any(|a| a == "--apply-kernel-state") {
+        let mut bore: Option<bool> = None;
+        let mut governor: Option<String> = None;
+        let mut epp: Option<String> = None;
+        let mut boost: Option<bool> = None;
+        let mut aspm: Option<String> = None;
+        let persist = args.iter().any(|a| a == "--persist");
+
+        let mut i = 1;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--bore" if i + 1 < args.len() => {
+                    bore = Some(args[i + 1] == "1");
+                    i += 1;
+                }
+                "--governor" if i + 1 < args.len() => {
+                    governor = Some(args[i + 1].clone());
+                    i += 1;
+                }
+                "--epp" if i + 1 < args.len() => {
+                    epp = Some(args[i + 1].clone());
+                    i += 1;
+                }
+                "--boost" if i + 1 < args.len() => {
+                    boost = Some(args[i + 1] == "1");
+                    i += 1;
+                }
+                "--aspm" if i + 1 < args.len() => {
+                    aspm = Some(args[i + 1].clone());
+                    i += 1;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+
+        match mithrandir::apply_kernel_state_privileged(
+            bore,
+            governor.as_deref(),
+            epp.as_deref(),
+            boost,
+            aspm.as_deref(),
+            persist,
+        ) {
+            Ok(_) => {
+                println!("✅ Mithrandir kernel & power state applied successfully.");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("❌ Error applying kernel & power state: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    if args.iter().any(|a| a == "--kernel" || a == "--sched") {
+        let kinfo = mithrandir::detect_kernel();
+        println!("🧠 Kernel Release:      {}", kinfo.kernel_release);
+        println!("🐧 CachyOS Kernel:      {}", if kinfo.is_cachyos { "Yes" } else { "No" });
+        println!("⚡ BORE Supported:      {}", if kinfo.bore_supported { "Yes" } else { "No" });
+        if kinfo.bore_supported {
+            println!("   BORE Active:         {}", if kinfo.bore_enabled { "Enabled (1)" } else { "Disabled / EEVDF (0)" });
+        }
+        println!("🔄 sched-ext (SCX):     {}", if kinfo.scx_supported { "Yes" } else { "No" });
+        if kinfo.scx_supported {
+            println!("   Active Scheduler:    {}", kinfo.scx_active_scheduler);
+            println!("   Scheduler Mode:      {}", kinfo.scx_mode);
+            println!("   Available SCX:       {:?}", kinfo.supported_scx_schedulers);
+        }
+        println!("🔋 Active Power Preset:  {}", mithrandir::get_active_preset().name());
+        return;
+    }
 
     if args.iter().any(|a| a == "--smart-boost") {
         println!("⚡ Executing Mithrandir Smart Boost (Rust Engine)...");
@@ -56,7 +129,7 @@ fn main() {
         std::thread::spawn(|| {
             loop {
                 std::thread::sleep(std::time::Duration::from_secs(60));
-                let cfg = mithrandir_rs::AppSettings::get();
+                let cfg = mithrandir::AppSettings::get();
                 if cfg.auto_boost_enabled {
                     BackgroundDaemon::run_auto_boost_check(
                         cfg.ram_threshold,
@@ -69,24 +142,24 @@ fn main() {
         });
 
         let app = adw::Application::builder()
-            .application_id("io.github.antonio.MithrandirRS")
+            .application_id("io.github.antonio.Mithrandir")
             .build();
 
         app.connect_shutdown(|_| {
-            let _ = mithrandir_rs::LocalLLMManager::stop_llamacpp_server();
+            let _ = mithrandir::LocalLLMManager::stop_llamacpp_server();
         });
 
         // Query initial power saver state and create thread-safe shared flag
-        let initial_power_saver = mithrandir_rs::PowerManager::is_power_saver_active();
+        let initial_power_saver = mithrandir::PowerManager::is_power_saver_active();
         let power_saver_arc = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(initial_power_saver));
 
         // Setup communication channel between tray thread and GTK4 main thread
         let (tx, rx) = async_channel::unbounded();
 
         // Spawn pure Rust StatusNotifierItem (SNI) + DBusMenu service (no GTK3 conflict)
-        match mithrandir_rs::tray::MithrandirTray::spawn_service(tx, power_saver_arc.clone()) {
+        match mithrandir::tray::MithrandirTray::spawn_service(tx, power_saver_arc.clone()) {
             Ok(handle) => {
-                mithrandir_rs::tray::register_tray_handle(handle);
+                mithrandir::tray::register_tray_handle(handle);
             }
             Err(e) => {
                 eprintln!("Warning: Failed to register system tray icon: {}", e);
@@ -111,7 +184,7 @@ fn main() {
                 return;
             }
 
-            let win = mithrandir_rs::ui::MithrandirWindow::build(app);
+            let win = mithrandir::ui::MithrandirWindow::build(app);
 
             let rx_channel = rx.clone();
             let app_weak = app.downgrade();
@@ -121,17 +194,33 @@ fn main() {
             gtk4::glib::spawn_future_local(async move {
                 while let Ok(action) = rx_channel.recv().await {
                     match action {
-                        mithrandir_rs::TrayAction::RunSmartboost => {
-                            if let Some(res) = mithrandir_rs::tray::MithrandirTray::execute_tray_smartboost() {
+                        mithrandir::TrayAction::RunSmartboost => {
+                            if let Some(res) = mithrandir::tray::MithrandirTray::execute_tray_smartboost() {
                                 let body = format!(
                                     "Reclaimed {:.1} MB RAM and freed {:.1} MB disk cache.",
                                     res.ram_reclaimed_mb, res.disk_freed_mb
                                 );
-                                mithrandir_rs::NotificationManager::send_notification("⚡ Smart Boost", &body);
+                                mithrandir::NotificationManager::send_notification("⚡ Smart Boost", &body);
                             }
                         }
-                        mithrandir_rs::TrayAction::TogglePowerSaver(enable) => {
-                            let res = mithrandir_rs::PowerManager::set_power_saver(enable);
+                        mithrandir::TrayAction::ApplyPreset(preset) => {
+                            match mithrandir::apply_preset(preset) {
+                                Ok(_) => {
+                                    let msg = format!("Applied Power Preset: {}", preset.name());
+                                    mithrandir::NotificationManager::send_notification("⚡ Power Management", &msg);
+                                    let is_battery = preset == mithrandir::PowerPreset::Battery;
+                                    ps_arc.store(is_battery, std::sync::atomic::Ordering::SeqCst);
+                                    mithrandir::tray::sync_tray_power_saver(is_battery);
+                                    mithrandir::ui::DashboardPage::update_ui_power_saver(is_battery);
+                                }
+                                Err(e) => {
+                                    let err_msg = format!("Failed to apply preset {}: {}", preset.name(), e);
+                                    mithrandir::NotificationManager::send_notification("⚠️ Power Error", &err_msg);
+                                }
+                            }
+                        }
+                        mithrandir::TrayAction::TogglePowerSaver(enable) => {
+                            let res = mithrandir::PowerManager::set_power_saver(enable);
                             match res {
                                 Ok(_) => {
                                     let body = if enable {
@@ -139,26 +228,26 @@ fn main() {
                                     } else {
                                         "Hardware Power Saver Disabled (Performance Restored)"
                                     };
-                                    mithrandir_rs::NotificationManager::send_notification("⚡ Power Management", body);
-                                    mithrandir_rs::ui::DashboardPage::update_ui_power_saver(enable);
+                                    mithrandir::NotificationManager::send_notification("⚡ Power Management", body);
+                                    mithrandir::ui::DashboardPage::update_ui_power_saver(enable);
                                 }
                                 Err(e) => {
                                     eprintln!("Failed to toggle power saver: {}", e);
                                     ps_arc.store(!enable, std::sync::atomic::Ordering::SeqCst);
-                                    mithrandir_rs::tray::sync_tray_power_saver(!enable);
-                                    mithrandir_rs::ui::DashboardPage::update_ui_power_saver(!enable);
+                                    mithrandir::tray::sync_tray_power_saver(!enable);
+                                    mithrandir::ui::DashboardPage::update_ui_power_saver(!enable);
                                     let err_msg = format!("Failed to change power profile: {}", e);
-                                    mithrandir_rs::NotificationManager::send_notification("⚠️ Power Saver Error", &err_msg);
+                                    mithrandir::NotificationManager::send_notification("⚠️ Power Saver Error", &err_msg);
                                 }
                             }
                         }
-                        mithrandir_rs::TrayAction::OpenMithrandir => {
+                        mithrandir::TrayAction::OpenMithrandir => {
                             if let Some(w) = win_weak.upgrade() {
                                 w.set_visible(true);
                                 w.present();
                             }
                         }
-                        mithrandir_rs::TrayAction::QuitMithrandir => {
+                        mithrandir::TrayAction::QuitMithrandir => {
                             if let Some(a) = app_weak.upgrade() {
                                 a.quit();
                             }
@@ -182,13 +271,14 @@ fn main() {
 
     #[cfg(not(feature = "gui"))]
     {
-        println!("Mithrandir-RS v0.4.4 (GNU/Linux System Cleaner & Optimizer in Rust)");
+        println!("Mithrandir v0.5.0 (GNU/Linux System Cleaner, Optimizer & Kernel Manager in Rust)");
         println!("Usage:");
-        println!("  mithrandir-rs                 Launch Libadwaita GUI");
-        println!("  mithrandir-rs --smart-boost   One-click RAM and cache boost");
-        println!("  mithrandir-rs --monitor       Real-time system telemetry");
-        println!("  mithrandir-rs --clean         Scan system clutter and cache");
-        println!("  mithrandir-rs --background    Launch hidden in background with panel tray icon");
-        println!("  mithrandir-rs --keep-alive    Run background daemon on login");
+        println!("  mithrandir                 Launch Libadwaita GUI");
+        println!("  mithrandir --smart-boost   One-click RAM and cache boost");
+        println!("  mithrandir --monitor       Real-time system telemetry");
+        println!("  mithrandir --kernel        CachyOS scheduler & power profile telemetry");
+        println!("  mithrandir --clean         Scan system clutter and cache");
+        println!("  mithrandir --background    Launch hidden in background with panel tray icon");
+        println!("  mithrandir --keep-alive    Run background daemon on login");
     }
 }

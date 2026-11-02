@@ -11,6 +11,7 @@ use std::sync::Arc;
 pub enum TrayAction {
     RunSmartboost,
     TogglePowerSaver(bool),
+    ApplyPreset(crate::power::PowerPreset),
     OpenMithrandir,
     QuitMithrandir,
 }
@@ -112,7 +113,7 @@ impl MithrandirTray {
 
 impl Tray for MithrandirTray {
     fn id(&self) -> String {
-        "mithrandir-rs".to_string()
+        "mithrandir".to_string()
     }
 
     fn category(&self) -> Category {
@@ -120,7 +121,7 @@ impl Tray for MithrandirTray {
     }
 
     fn title(&self) -> String {
-        "Mithrandir-RS".to_string()
+        "Mithrandir".to_string()
     }
 
     fn icon_name(&self) -> String {
@@ -138,10 +139,77 @@ impl Tray for MithrandirTray {
     fn menu(&self) -> Vec<MenuItem<Self>> {
         let tx_boost = self.tx.clone();
         let tx_power = self.tx.clone();
+        let tx_bat = self.tx.clone();
+        let tx_bal = self.tx.clone();
+        let tx_low = self.tx.clone();
+        let tx_game = self.tx.clone();
         let tx_open = self.tx.clone();
         let tx_quit = self.tx.clone();
 
         let is_power_active = self.power_saver_enabled.load(Ordering::SeqCst);
+        let kinfo = crate::kernel::detect_kernel();
+        let current_preset = crate::power::get_active_preset();
+
+        let sched_info = if kinfo.scx_supported && kinfo.scx_active_scheduler != "none" {
+            format!("Active: {}", kinfo.scx_active_scheduler)
+        } else if kinfo.bore_supported && kinfo.bore_enabled {
+            "Active: BORE".to_string()
+        } else if kinfo.bore_supported && !kinfo.bore_enabled {
+            "Active: EEVDF".to_string()
+        } else {
+            "Active: Default".to_string()
+        };
+
+        let kernel_submenu = SubMenu {
+            label: "Kernel & Power".into(),
+            icon_name: "power-profile-balanced-symbolic".into(),
+            submenu: vec![
+                StandardItem {
+                    label: sched_info,
+                    enabled: false,
+                    ..Default::default()
+                }
+                .into(),
+                MenuItem::Separator,
+                CheckmarkItem {
+                    label: "Battery / Silent".into(),
+                    checked: current_preset == crate::power::PowerPreset::Battery,
+                    activate: Box::new(move |_| {
+                        let _ = tx_bat.try_send(TrayAction::ApplyPreset(crate::power::PowerPreset::Battery));
+                    }),
+                    ..Default::default()
+                }
+                .into(),
+                CheckmarkItem {
+                    label: "Balanced".into(),
+                    checked: current_preset == crate::power::PowerPreset::Balanced,
+                    activate: Box::new(move |_| {
+                        let _ = tx_bal.try_send(TrayAction::ApplyPreset(crate::power::PowerPreset::Balanced));
+                    }),
+                    ..Default::default()
+                }
+                .into(),
+                CheckmarkItem {
+                    label: "Low-Latency / Workstation".into(),
+                    checked: current_preset == crate::power::PowerPreset::LowLatency,
+                    activate: Box::new(move |_| {
+                        let _ = tx_low.try_send(TrayAction::ApplyPreset(crate::power::PowerPreset::LowLatency));
+                    }),
+                    ..Default::default()
+                }
+                .into(),
+                CheckmarkItem {
+                    label: "Max Performance / Gaming".into(),
+                    checked: current_preset == crate::power::PowerPreset::Gaming,
+                    activate: Box::new(move |_| {
+                        let _ = tx_game.try_send(TrayAction::ApplyPreset(crate::power::PowerPreset::Gaming));
+                    }),
+                    ..Default::default()
+                }
+                .into(),
+            ],
+            ..Default::default()
+        };
 
         vec![
             StandardItem {
@@ -166,6 +234,7 @@ impl Tray for MithrandirTray {
                 ..Default::default()
             }
             .into(),
+            kernel_submenu.into(),
             MenuItem::Separator,
             StandardItem {
                 label: "Open Mithrandir".into(),

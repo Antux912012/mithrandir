@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${ROOT_DIR}"
 
 VERSION=$(grep -m1 '^version' "${ROOT_DIR}/Cargo.toml" | sed -E 's/.*"([^"]+)".*/\1/')
-APP_ID="io.github.antonio.MithrandirRS"
+APP_ID="io.github.antonio.Mithrandir"
 BUNDLE_PATH="${ROOT_DIR}/mithrandir-rs_${VERSION}.flatpak"
 
 echo "==> Staging Mithrandir-RS Flatpak build (v${VERSION})..."
@@ -37,7 +37,7 @@ mkdir -p "${BUILD_DIR}" "${REPO_DIR}"
 
 if command -v flatpak-builder &>/dev/null; then
   echo "==> Building with flatpak-builder..."
-  flatpak-builder --force-clean --repo="${REPO_DIR}" "${BUILD_DIR}" io.github.antonio.MithrandirRS.json
+  flatpak-builder --force-clean --repo="${REPO_DIR}" "${BUILD_DIR}" io.github.antonio.Mithrandir.json
 else
   echo "==> Initializing Flatpak environment with native flatpak tool..."
   flatpak build-init "${BUILD_DIR}" "${APP_ID}" org.gnome.Platform org.gnome.Platform 50
@@ -45,9 +45,9 @@ else
   echo "==> Staging application files into /app..."
   mkdir -p "${BUILD_DIR}/files"/{bin,share/applications,share/glib-2.0/schemas,share/metainfo,share/icons/hicolor}
   install -m 755 "${ROOT_DIR}/target/release/mithrandir-rs" "${BUILD_DIR}/files/bin/mithrandir-rs"
-  install -m 644 "${ROOT_DIR}/data/io.github.antonio.MithrandirRS.desktop" "${BUILD_DIR}/files/share/applications/${APP_ID}.desktop"
-  install -m 644 "${ROOT_DIR}/data/io.github.antonio.MithrandirRS.gschema.xml" "${BUILD_DIR}/files/share/glib-2.0/schemas/${APP_ID}.gschema.xml"
-  install -m 644 "${ROOT_DIR}/data/io.github.antonio.MithrandirRS.metainfo.xml" "${BUILD_DIR}/files/share/metainfo/${APP_ID}.metainfo.xml"
+  install -m 644 "${ROOT_DIR}/data/io.github.antonio.Mithrandir.desktop" "${BUILD_DIR}/files/share/applications/${APP_ID}.desktop"
+  install -m 644 "${ROOT_DIR}/data/io.github.antonio.Mithrandir.gschema.xml" "${BUILD_DIR}/files/share/glib-2.0/schemas/${APP_ID}.gschema.xml"
+  install -m 644 "${ROOT_DIR}/data/io.github.antonio.Mithrandir.metainfo.xml" "${BUILD_DIR}/files/share/metainfo/${APP_ID}.metainfo.xml"
   cp -r "${ROOT_DIR}/data/icons/hicolor/"* "${BUILD_DIR}/files/share/icons/hicolor/"
 
   glib-compile-schemas "${BUILD_DIR}/files/share/glib-2.0/schemas"

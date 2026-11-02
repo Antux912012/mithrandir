@@ -33,6 +33,14 @@ pub const PROTECTED_DIRS: &[&str] = &[
     "chrome",
 ];
 
+/// Crucial Flatpak protected directories inside `~/.var/app/<app-id>/` that must NEVER be cleaned.
+pub const STRICT_PROTECTED_APP_SUBDIRS: &[&str] = &[
+    "config",
+    "data",
+    ".local/state",
+    ".local",
+];
+
 /// Queries running Flatpak application IDs via `flatpak ps`.
 pub fn get_running_flatpaks() -> HashSet<String> {
     let mut running = HashSet::new();
@@ -57,7 +65,6 @@ pub fn is_protected_path(path: &Path, app_cache_root: &Path) -> bool {
     }
 
     // 2. Strict boundary check: path must stay within app_cache_root
-    // Check symlink targets if path is a symlink
     if path.is_symlink() {
         if let Ok(target) = std::fs::read_link(path) {
             let resolved = if target.is_relative() {

@@ -40,7 +40,7 @@ pub struct AntivirusEngine;
 impl AntivirusEngine {
     pub fn quarantine_dir() -> PathBuf {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-        PathBuf::from(home).join(".local/share/io.github.antonio.MithrandirRS/quarantine")
+        PathBuf::from(home).join(".local/share/io.github.antonio.Mithrandir/quarantine")
     }
 
     pub fn quarantine_files_dir() -> PathBuf {

@@ -10,7 +10,7 @@ impl NotificationManager {
             "notify-send",
             &[
                 "--app-name=Mithrandir-RS",
-                "--icon=io.github.antonio.MithrandirRS",
+                "--icon=io.github.antonio.Mithrandir",
                 summary,
                 body,
             ],

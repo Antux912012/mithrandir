@@ -23,7 +23,7 @@ impl AutostartManager {
     }
 
     pub fn is_mithrandir_autostart_enabled() -> bool {
-        let path = Self::get_user_autostart_dir().join("io.github.antonio.MithrandirRS.desktop");
+        let path = Self::get_user_autostart_dir().join("io.github.antonio.Mithrandir.desktop");
         if !path.exists() {
             return false;
         }
@@ -42,7 +42,7 @@ impl AutostartManager {
     pub fn set_mithrandir_autostart(enabled: bool) -> Result<(), String> {
         let dir = Self::get_user_autostart_dir();
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let path = dir.join("io.github.antonio.MithrandirRS.desktop");
+        let path = dir.join("io.github.antonio.Mithrandir.desktop");
 
         if enabled {
             let content = "[Desktop Entry]\n\
@@ -50,7 +50,7 @@ impl AutostartManager {
                            Name=Mithrandir-RS\n\
                            Comment=Start Mithrandir-RS in background on login\n\
                            Exec=mithrandir-rs --keep-alive\n\
-                           Icon=io.github.antonio.MithrandirRS\n\
+                           Icon=io.github.antonio.Mithrandir\n\
                            Terminal=false\n\
                            Hidden=false\n\
                            X-GNOME-Autostart-enabled=true\n";
