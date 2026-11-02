@@ -68,7 +68,7 @@ impl MithrandirTray {
         let height = 16;
         let mut data = Vec::with_capacity(width * height * 4);
 
-        // A terracotta circular emblem matching brand `#B7410E`
+        // A brand blue circular emblem matching Mithrandir `#2b7bdd`
         for y in 0..height {
             for x in 0..width {
                 let dx = (x as f32 - 7.5).abs();
@@ -76,11 +76,11 @@ impl MithrandirTray {
                 let dist = (dx * dx + dy * dy).sqrt();
 
                 if dist <= 6.5 {
-                    // ARGB32 format in network byte order: Alpha, Red, Green, Blue
+                    // ARGB32 format in network byte order: Alpha, Red, Green, Blue (#2b7bdd)
                     data.push(255); // Alpha
-                    data.push(183); // Red (#B7)
-                    data.push(65);  // Green (#41)
-                    data.push(14);  // Blue (#0E)
+                    data.push(43);  // Red (#2B)
+                    data.push(123); // Green (#7B)
+                    data.push(221); // Blue (#DD)
                 } else {
                     data.extend_from_slice(&[0, 0, 0, 0]);
                 }

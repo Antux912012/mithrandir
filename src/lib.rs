@@ -1,6 +1,5 @@
 pub mod backend;
 pub mod cleaners;
-pub mod ai;
 pub mod tray;
 pub mod power;
 pub mod kernel;
@@ -25,13 +24,8 @@ pub use cleaners::{
 };
 
 pub use backend::{
-    AntivirusEngine, AppSettings, AutostartManager, BackgroundDaemon, BatteryInfo, BtrfsManager, CleanCategory,
+    AppSettings, AutostartManager, BackgroundDaemon, BatteryInfo, BtrfsManager, CleanCategory,
     CleanerEngine, DiagnosticsCollector, DistroDetector, DistroFamily, GrubManager,
     HostBridge, NotificationManager, PackageManager, ProcessManager, ServiceManager,
-    SmartBoostEngine, SystemMonitor, ThreatFinding,
-};
-
-pub use ai::{
-    AIClient, BuiltinLinuxAssistant, ChatMessage, ChatResponse, GgufModelInfo,
-    LlamaCppStatus, LocalLLMManager, SafetyGuard, get_recommended_qwen_models,
+    SmartBoostEngine, SystemMonitor,
 };

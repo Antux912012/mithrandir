@@ -22,7 +22,6 @@ makedepends=(
     'git'
 )
 optdepends=(
-    'clamav: Anti-malware scanning and signature updates'
     'btrfs-progs: BTRFS subvolume and snapshot management'
     'papirus-icon-theme: Recommended icon theme'
     'power-profiles-daemon: Dynamic system power profile integration'

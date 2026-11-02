@@ -1,5 +1,4 @@
 use std::env;
-use crate::ai::SafetyGuard;
 use crate::backend::distro::DistroDetector;
 use crate::backend::host_bridge::HostBridge;
 use crate::backend::monitor::SystemMonitor;
@@ -7,7 +6,7 @@ use crate::backend::monitor::SystemMonitor;
 pub struct DiagnosticsCollector;
 
 impl DiagnosticsCollector {
-    /// Gathers a comprehensive system diagnostics snapshot with automated PII redaction.
+    /// Gathers a comprehensive system diagnostics snapshot.
     pub fn gather_system_snapshot() -> String {
         let distro = DistroDetector::detect();
         let kernel = HostBridge::run_command("uname", &["-r"])
@@ -46,16 +45,15 @@ impl DiagnosticsCollector {
             "Disk details unavailable".to_string()
         };
 
-        let raw_report = format!(
-            "You are a GNU/Linux system diagnostics assistant. Analyze this system state:\n\
+        let report = format!(
+            "Mithrandir System Diagnostics Snapshot:\n\
             - OS: {}\n\
             - Kernel: {}\n\
             - Desktop: {}\n\
             - Memory: {:.0}MB used of {:.0}MB ({:.1}%)\n\
             - Disk: {}\n\
             - Failed systemd units:\n{}\n\n\
-            - Recent system errors:\n{}\n\n\
-            Provide a brief diagnosis of any anomalies and propose a concrete shell fix command formatted strictly as: PROPOSED_COMMAND: <safe shell command>",
+            - Recent system errors:\n{}\n",
             distro.pretty_name,
             kernel,
             desktop,
@@ -67,6 +65,11 @@ impl DiagnosticsCollector {
             journal_errors
         );
 
-        SafetyGuard::redact_pii(&raw_report)
+        if let Ok(user) = env::var("USER") {
+            if !user.is_empty() {
+                return report.replace(&user, "[REDACTED_USER]");
+            }
+        }
+        report
     }
 }

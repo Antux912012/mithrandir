@@ -13,7 +13,6 @@ pkgbase = mithrandir
 	depends = glib2
 	depends = polkit
 	depends = hicolor-icon-theme
-	optdepends = clamav: Anti-malware scanning and signature updates
 	optdepends = btrfs-progs: BTRFS subvolume and snapshot management
 	optdepends = papirus-icon-theme: Recommended icon theme
 	optdepends = power-profiles-daemon: Dynamic system power profile integration

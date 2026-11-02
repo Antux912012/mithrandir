@@ -10,17 +10,16 @@
       Mithrandir is a high-performance system maintenance suite, cleaner, and diagnostic toolkit rewritten entirely in Rust with GTK4 and Libadwaita. It delivers instantaneous cleanup scans, deep cache pruning, hardware power management, and granular control over startup services and system processes without background resource overhead.
     </p>
     <p>
-      Designed with a focus on safety and transparency, Mithrandir protects critical operating system paths, features a quarantined ClamAV vault, and runs diagnostic telemetry off the main UI thread for completely stutter-free operation.
+      Designed with a focus on safety and transparency, Mithrandir protects critical operating system paths, respects user sandboxes, and runs diagnostic telemetry off the main UI thread for completely stutter-free operation.
     </p>
     <ul>
       <li>High-Throughput Cleaner: Multi-threaded cleanup for package caches, thumbnails, application logs, and Flatpak runtimes</li>
-      <li>Hardware Power Saver: One-click CPU Turbo disabling, EPP power profiles, and PCIe ASPM deep power saving</li>
+      <li>CachyOS &amp; Kernel Schedulers: Dynamic management for BORE and sched-ext (SCX) BPF pluggable schedulers</li>
+      <li>Hardware Power Profiles: Coordinated CPU Turbo Boost, governors, EPP power profiles, and PCIe ASPM management</li>
       <li>Pure Rust System Tray: StatusNotifierItem and DBusMenu panel integration adapting automatically to Light/Dark desktop themes</li>
       <li>Zero-Sleep Real-Time Telemetry: Instant CPU delta calculation, dual GPU metrics, and battery health reporting</li>
       <li>Debounced Smart Boost: Safe one-click memory optimization and temporary file reclamation</li>
-      <li>Quarantine Vault: Integrated ClamAV scanning with secure isolation for flagged files</li>
-      <li>Integrated Mini-LLM Manager: One-click download and execution of local GGUF models via llama.cpp or Ollama</li>
-      <li>Dual AI Diagnostics: Real-time diagnostic assistance powered by local offline models or Google Gemini and Claude APIs</li>
+      <li>Adaptive Libadwaita Interface: Responsive layout conforming strictly to GNOME HIG on desktop and mobile screens</li>
     </ul>
   </description>
   <url type="homepage">https://github.com/Antux912012/mithrandir</url>
@@ -30,8 +29,8 @@
   </developer>
   <launchable type="desktop-id">io.github.antonio.Mithrandir.desktop</launchable>
   <branding>
-    <color type="primary" scheme_preference="light">#2ec27e</color>
-    <color type="primary" scheme_preference="dark">#26a269</color>
+    <color type="primary" scheme_preference="light">#2b7bdd</color>
+    <color type="primary" scheme_preference="dark">#174272</color>
   </branding>
   <content_rating type="oars-1.1" />
   <releases>

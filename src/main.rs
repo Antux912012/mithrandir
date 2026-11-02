@@ -145,10 +145,6 @@ fn main() {
             .application_id("io.github.antonio.Mithrandir")
             .build();
 
-        app.connect_shutdown(|_| {
-            let _ = mithrandir::LocalLLMManager::stop_llamacpp_server();
-        });
-
         // Query initial power saver state and create thread-safe shared flag
         let initial_power_saver = mithrandir::PowerManager::is_power_saver_active();
         let power_saver_arc = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(initial_power_saver));

@@ -1,6 +1,6 @@
 use libadwaita as adw;
 use adw::prelude::*;
-use adw::{ActionRow, PreferencesGroup, PreferencesPage, PreferencesWindow, SpinRow, SwitchRow};
+use adw::{PreferencesGroup, PreferencesPage, PreferencesWindow, SpinRow, SwitchRow};
 use crate::backend::settings::AppSettings;
 
 pub struct PreferencesDialog;
@@ -12,7 +12,7 @@ impl PreferencesDialog {
             .modal(true)
             .title("Preferences")
             .default_width(620)
-            .default_height(520)
+            .default_height(480)
             .build();
 
         let settings = AppSettings::get();
@@ -97,60 +97,6 @@ impl PreferencesDialog {
         });
         boost_group.add(&notify_row);
         page.add(&boost_group);
-
-        // 3. Anti-Malware Protection
-        let av_group = PreferencesGroup::builder()
-            .title("Anti-Malware & ClamAV")
-            .description("Virus definition update policies and definitions freshness")
-            .build();
-
-        let auto_fresh_row = SwitchRow::builder()
-            .title("Auto-Update Before Scanning")
-            .subtitle("Invoke FreshClam to fetch latest signatures before executing scans")
-            .active(settings.auto_freshclam)
-            .build();
-        auto_fresh_row.connect_active_notify(|row| {
-            let active = row.is_active();
-            AppSettings::update(|cfg| cfg.auto_freshclam = active);
-        });
-        av_group.add(&auto_fresh_row);
-
-        let stale_hours_row = SpinRow::builder()
-            .title("Definition Stale Threshold (hours)")
-            .subtitle("Warn when local virus definitions are older than this value")
-            .adjustment(&gtk4::Adjustment::new(settings.stale_hours_threshold as f64, 1.0, 168.0, 1.0, 12.0, 0.0))
-            .build();
-        stale_hours_row.connect_value_notify(|row| {
-            let val = row.value().round() as u64;
-            AppSettings::update(|cfg| cfg.stale_hours_threshold = val);
-        });
-        av_group.add(&stale_hours_row);
-        page.add(&av_group);
-
-        // 4. AI Diagnostics Defaults
-        let ai_group = PreferencesGroup::builder()
-            .title("AI Diagnostics & Cloud / Local Inference")
-            .description("Supports Google Gemini (Google AI Studio), Anthropic Claude, OpenAI, NVIDIA NIM, Ollama, LM Studio, and In-App llama.cpp")
-            .build();
-
-        let default_provider_row = ActionRow::builder()
-            .title("Default AI Provider")
-            .subtitle("Built-in Linux Mini-Assistant (Offline, Zero-Download)")
-            .build();
-        ai_group.add(&default_provider_row);
-
-        let gemini_provider_row = ActionRow::builder()
-            .title("Google Gemini (Google AI Studio)")
-            .subtitle("gemini-2.5-flash on https://generativelanguage.googleapis.com/v1beta")
-            .build();
-        ai_group.add(&gemini_provider_row);
-
-        let inapp_model_row = ActionRow::builder()
-            .title("Recommended In-App Model")
-            .subtitle("Qwen 2.5 1.5B Instruct GGUF on http://127.0.0.1:18080/v1")
-            .build();
-        ai_group.add(&inapp_model_row);
-        page.add(&ai_group);
 
         win.add(&page);
         win

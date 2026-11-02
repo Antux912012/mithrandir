@@ -31,8 +31,8 @@ fi
 
 echo "==> Authenticated as GitHub user: ${USER_LOGIN}"
 
-REPO_NAME="mithrandir-rs"
-REPO_DESC="Modern GNU/Linux Cleaner, Optimizer, Telemetry & Diagnostics in Rust (GTK4/Libadwaita)"
+REPO_NAME="mithrandir"
+REPO_DESC="Unified Native Linux System Optimization, Cache Management, CachyOS Schedulers & Power Utility in Rust"
 
 echo "==> Checking if repository ${USER_LOGIN}/${REPO_NAME} exists..."
 CHECK_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
