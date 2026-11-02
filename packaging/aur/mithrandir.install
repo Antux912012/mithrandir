@@ -1,10 +1,11 @@
 post_install() {
     echo "================================================================================"
-    echo "  :: Mithrandir-RS v0.4.4 (Rust Edition) installed successfully! 🦀"
-    echo "  :: Native GTK4 & Libadwaita GNU/Linux Optimizer, Cleaner & Power Saver"
+    echo "  :: Mithrandir v1.0.0 installed successfully! 🦀"
+    echo "  :: Native GTK4/Libadwaita System Optimizer, CachyOS Scheduler & Power Manager"
     echo "================================================================================"
-    echo "  * Launch the application:          mithrandir-rs"
-    echo "  * Start in system tray icon:       mithrandir-rs --background"
+    echo "  * Launch the application:          mithrandir"
+    echo "  * Start in system tray icon:       mithrandir --background"
+    echo "  * Polkit Policy:                   /usr/share/polkit-1/actions/io.github.antonio.Mithrandir.policy"
     echo "  * Hardware Power Saver udev rules: /usr/lib/udev/rules.d/99-mithrandir-power.rules"
     echo "================================================================================"
 }

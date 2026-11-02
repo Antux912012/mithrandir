@@ -35,9 +35,9 @@
   </branding>
   <content_rating type="oars-1.1" />
   <releases>
-    <release version="0.5.0" date="2026-11-02">
+    <release version="1.0.0" date="2026-11-02">
       <description>
-        <p>Mithrandir v0.5.0 introduces unified rebranding, robust Flatpak sandbox cache safety, and CachyOS BORE/sched-ext hardware scheduler controls:</p>
+        <p>Mithrandir v1.0.0 Official Release — Unified GNU/Linux optimizer, CachyOS BORE and sched-ext manager, safe Flatpak cache cleaner, and hardware power presets.</p>
         <ul>
           <li>Unified repository rebranding to Mithrandir.</li>
           <li>Strict Flatpak sandbox cache protection preventing accidental configuration or profile deletion.</li>

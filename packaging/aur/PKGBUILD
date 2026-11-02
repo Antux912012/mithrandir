@@ -1,12 +1,15 @@
-# Maintainer: Antonio <antonio@localhost>
-pkgname=mithrandir-rs
-pkgver=0.4.4
+# Maintainer: Antonio <antux912012@users.noreply.github.com>
+pkgname=mithrandir
+pkgver=1.0.0
 pkgrel=1
-pkgdesc="Native GTK4 & Libadwaita GNU/Linux System Optimizer, Deep Cleaner, and Hardware Power Saver in Rust"
+pkgdesc="Native GTK4 & Libadwaita GNU/Linux System Optimizer, CachyOS Scheduler & Power Manager in Rust"
 arch=('x86_64')
-url="https://github.com/Antux912012/mithrandir-rs"
+url="https://github.com/Antux912012/mithrandir"
 license=('GPL-3.0-or-later')
-install=mithrandir-rs.install
+install=mithrandir.install
+provides=('mithrandir-rs')
+conflicts=('mithrandir-rs')
+replaces=('mithrandir-rs')
 depends=(
     'gtk4'
     'libadwaita'
@@ -22,6 +25,8 @@ optdepends=(
     'clamav: Anti-malware scanning and signature updates'
     'btrfs-progs: BTRFS subvolume and snapshot management'
     'papirus-icon-theme: Recommended icon theme'
+    'power-profiles-daemon: Dynamic system power profile integration'
+    'scxctl: Sched-ext BPF scheduler CLI control'
 )
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Antux912012/${pkgname}/archive/refs/tags/v${pkgver}.tar.gz")
 sha256sums=('SKIP')
@@ -49,12 +54,16 @@ package() {
     cd "${srcdir}/${pkgname}-${pkgver}"
 
     # Install executable binary
-    install -Dm755 target/release/mithrandir-rs "${pkgdir}/usr/bin/mithrandir-rs"
+    install -Dm755 target/release/mithrandir "${pkgdir}/usr/bin/mithrandir"
+    ln -sf /usr/bin/mithrandir "${pkgdir}/usr/bin/mithrandir-rs"
 
     # Install desktop launcher, schema, and AppStream metainfo
     install -Dm644 data/io.github.antonio.Mithrandir.desktop "${pkgdir}/usr/share/applications/io.github.antonio.Mithrandir.desktop"
     install -Dm644 data/io.github.antonio.Mithrandir.gschema.xml "${pkgdir}/usr/share/glib-2.0/schemas/io.github.antonio.Mithrandir.gschema.xml"
     install -Dm644 data/io.github.antonio.Mithrandir.metainfo.xml "${pkgdir}/usr/share/metainfo/io.github.antonio.Mithrandir.metainfo.xml"
+
+    # Install Polkit policy
+    install -Dm644 data/io.github.antonio.Mithrandir.policy "${pkgdir}/usr/share/polkit-1/actions/io.github.antonio.Mithrandir.policy"
 
     # Install udev hardware power management rules
     install -Dm644 data/99-mithrandir-power.rules "${pkgdir}/usr/lib/udev/rules.d/99-mithrandir-power.rules"

@@ -1,24 +1,27 @@
-.PHONY: all build test check clean deb rpm flatpak aur publish
+.PHONY: all build test check clean appimage flatpak aur publish
 
-all: build deb rpm flatpak aur
+all: build flatpak appimage aur
 
 build:
-	flatpak run --user --devel --share=network --filesystem=home --command=sh org.gnome.Sdk//50 -c \
-	  "export PATH=\$$HOME/.cargo/bin:\$$PATH && cargo build --release --features gui"
+	podman run --rm --userns=keep-id \
+	  -v mithrandir-cargo-cache:/var/tmp/cargo:Z -e CARGO_HOME=/var/tmp/cargo \
+	  -v "$$(pwd):/workspace:Z" -w /workspace localhost/dev-fedora \
+	  cargo build --release --features gui
 
 check:
-	cargo check
-	flatpak run --user --devel --share=network --filesystem=home --command=sh org.gnome.Sdk//50 -c \
-	  "export PATH=\$$HOME/.cargo/bin:\$$PATH && cargo check --features gui"
+	podman run --rm --userns=keep-id \
+	  -v mithrandir-cargo-cache:/var/tmp/cargo:Z -e CARGO_HOME=/var/tmp/cargo \
+	  -v "$$(pwd):/workspace:Z" -w /workspace localhost/dev-fedora \
+	  cargo check --features gui
 
 test:
-	cargo test
+	podman run --rm --userns=keep-id \
+	  -v mithrandir-cargo-cache:/var/tmp/cargo:Z -e CARGO_HOME=/var/tmp/cargo \
+	  -v "$$(pwd):/workspace:Z" -w /workspace localhost/dev-fedora \
+	  cargo test
 
-deb:
-	./packaging/build_deb.sh
-
-rpm:
-	./packaging/build_rpm.sh
+appimage:
+	./packaging/build_appimage.sh
 
 flatpak:
 	./packaging/build_flatpak.sh
@@ -31,4 +34,4 @@ publish:
 
 clean:
 	cargo clean
-	rm -rf build-dir-rs repo-rs target/pkg-deb target/pkg-rpm target/pkg-flatpak target/repo-flatpak .flatpak-builder
+	rm -rf target/pkg-flatpak target/repo-flatpak target/pkg-appimage *.AppImage *.flatpak

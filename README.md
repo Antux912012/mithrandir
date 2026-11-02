@@ -2,40 +2,32 @@
   <img src="data/icons/hicolor/scalable/apps/io.github.antonio.Mithrandir.svg" width="128" height="128" alt="Mithrandir Application Icon" />
 </p>
 
-<h1 align="center">Mithrandir (Rust Edition) 🦀</h1>
+<h1 align="center">Mithrandir 🦀</h1>
 
 <p align="center">
-  <strong>Native GTK4 & Libadwaita GNU/Linux System Optimizer, Deep Cleaner, and Performance Booster</strong><br>
+  <strong>Native GTK4 & Libadwaita GNU/Linux System Optimizer, Deep Cleaner, CachyOS Scheduler & Power Manager</strong><br>
   <em>Blazing-fast native execution, instant startup, and low memory overhead written in Rust.</em>
 </p>
 
 <p align="center">
-  <a href="#-installation"><img src="https://img.shields.io/badge/version-0.4.4--preview-orange.svg" alt="Version" /></a>
+  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.0.0-brightgreen.svg" alt="Version" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later" /></a>
   <a href="https://gtk.org/"><img src="https://img.shields.io/badge/GUI-GTK%204%20%7C%20Libadwaita-brightgreen.svg" alt="GTK4 & Libadwaita" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.80%2B-informational.svg" alt="Rust 1.80+" /></a>
-  <a href="https://getfedora.org/"><img src="https://img.shields.io/badge/Fedora-Compatible-51A2DA?logo=fedora&logoColor=white" alt="Fedora Compatible" /></a>
   <a href="https://github.com/Antux912012/mithrandir"><img src="https://img.shields.io/badge/Platform-GNU%2FLinux-orange.svg" alt="Platform" /></a>
 </p>
 
 ---
 
-> [!IMPORTANT]
-> **Project Roadmap & Deprecation Notice:**  
-> The standard Python edition of [**Mithrandir**](https://github.com/Antux912012/mithrandir) is planned to be deprecated as development focus transitions to **Mithrandir**. All future feature improvements, system integrations, and performance optimizations will be delivered in this Rust codebase.  
-> At a future milestone, Mithrandir will graduate from its preview designation and be officially rebranded as either **Mithrandir** or **Radagast** 🧙‍♂️.
-
-**Mithrandir** is a blazing-fast, native system optimizer, deep cleaner, telemetry monitor, and hardware power saver written in **Rust** with **GTK4** and **Libadwaita**, engineered for instant startup, minimal memory footprint, and robust multi-distribution compatibility.
-
-Differentiated by its distinctive **Rust Terracotta `#B7410E`** visual theme, Mithrandir explores native compiled speed while progressive feature parity with the main project is being developed.
+**Mithrandir** is a blazing-fast, native system optimizer, deep cleaner, telemetry monitor, CachyOS kernel scheduler manager, and hardware power optimizer written in **Rust** with **GTK4** and **Libadwaita**, engineered for instant startup, minimal memory footprint, and robust multi-distribution compatibility.
 
 > [!NOTE]
-> **What's New in v0.4.4:**
-> - 🚀 **Comprehensive Codebase Optimization**: Real-time process list sorting with zero heap allocations; CPU thermal sysfs path discovery cached to avoid 48 redundant syscalls per second.
-> - 🧹 **Cleaner De-duplication**: Resolved overlapping directory walks in user cache scanning to eliminate duplicate disk space calculation.
-> - 🔒 **Subprocess Reliability**: Concurrent non-blocking pipe consumption in `HostBridge` streaming to eliminate pipe buffer deadlock risks.
-> - ⚙️ **Persistent User Preferences**: Preferences dialog connected to persistent JSON storage for background daemon, notification, and auto-boost threshold settings.
-> - ⚡ **Pure Rust SNI & Hardware Power Saver**: Seamless desktop tray applet and Intel P-State / PCIe ASPM hardware controls.
+> **What's New in v1.0.0:**
+> - 🚀 **Unified Architecture**: Rust workspace consolidating all features into a single high-performance binary.
+> - 🧹 **Hardened Flatpak Cache Safety**: Strict XDG sandbox boundary validation ensuring `config/`, `data/`, and `.local/state/` are never touched.
+> - 🧠 **CachyOS Schedulers**: Full runtime and persistent control for BORE (`sched_bore`) and `sched-ext` (SCX BPF schedulers) via system D-Bus.
+> - ⚡ **Mithrandir Presets**: One-click switching across 4 profiles (Battery/Silent, Balanced, Low-Latency/Workstation, Gaming).
+> - 📦 **Modern Universal Distribution**: Standalone AppImage, single-file Flatpak bundle, and Arch Linux / CachyOS AUR package.
 
 ---
 
@@ -94,19 +86,17 @@ Mithrandir includes hardware-level battery and power saving controls synced acro
 
 Pre-built standalone packages are ready in the repository root:
 
-### Debian / Ubuntu (`.deb`)
+### AppImage (`.AppImage`)
+Run instantly on any modern GNU/Linux distribution:
 ```bash
-sudo dpkg -i mithrandir_0.4.4_amd64.deb
-```
-
-### Fedora / RHEL (`.rpm`)
-```bash
-sudo dnf install ./mithrandir_0.4.4_x86_64.rpm
+chmod +x ./mithrandir-1.0.0-x86_64.AppImage
+./mithrandir-1.0.0-x86_64.AppImage
 ```
 
 ### Flatpak Bundle (`.flatpak`)
+Install the sandboxed single-file bundle:
 ```bash
-flatpak install --user mithrandir_0.4.4.flatpak
+flatpak install --user mithrandir_1.0.0.flatpak
 ```
 Run via Flatpak:
 ```bash
@@ -150,19 +140,16 @@ mithrandir --clean
 
 ### Quick Build with Makefile
 ```bash
-# Build .deb, .rpm, and .flatpak packages
+# Build all targets (release binary, Flatpak, AppImage)
 make all
 
-# Build only the Fedora RPM package
-make rpm
-
-# Build only the Debian package
-make deb
+# Build only the AppImage package
+make appimage
 
 # Build only the Flatpak bundle
 make flatpak
 
-# Run backend test suite
+# Run unit & integration test suite
 make test
 ```
 
