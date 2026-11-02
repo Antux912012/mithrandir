@@ -142,7 +142,7 @@ fn main() {
         });
 
         let app = adw::Application::builder()
-            .application_id("io.github.antonio.Mithrandir")
+            .application_id("io.github.antux912012.Mithrandir")
             .build();
 
         // Query initial power saver state and create thread-safe shared flag

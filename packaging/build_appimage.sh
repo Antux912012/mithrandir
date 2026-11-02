@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 VERSION=$(grep -m1 '^version' "${ROOT_DIR}/Cargo.toml" | sed -E 's/.*"([^"]+)".*/\1/')
-APP_ID="io.github.antonio.Mithrandir"
+APP_ID="io.github.antux912012.Mithrandir"
 APP_NAME="mithrandir"
 OUTPUT_APPIMAGE="${ROOT_DIR}/${APP_NAME}-${VERSION}-x86_64.AppImage"
 APPDIR="${ROOT_DIR}/target/pkg-appimage/AppDir"
@@ -30,16 +30,16 @@ mkdir -p "${APPDIR}/usr/share/metainfo"
 mkdir -p "${APPDIR}/usr/share/icons/hicolor"
 
 install -m 755 "${ROOT_DIR}/target/release/mithrandir" "${APPDIR}/usr/bin/mithrandir"
-install -m 644 "${ROOT_DIR}/data/io.github.antonio.Mithrandir.desktop" "${APPDIR}/usr/share/applications/${APP_ID}.desktop"
-install -m 644 "${ROOT_DIR}/data/io.github.antonio.Mithrandir.gschema.xml" "${APPDIR}/usr/share/glib-2.0/schemas/${APP_ID}.gschema.xml"
-install -m 644 "${ROOT_DIR}/data/io.github.antonio.Mithrandir.metainfo.xml" "${APPDIR}/usr/share/metainfo/${APP_ID}.metainfo.xml"
+install -m 644 "${ROOT_DIR}/data/${APP_ID}.desktop" "${APPDIR}/usr/share/applications/${APP_ID}.desktop"
+install -m 644 "${ROOT_DIR}/data/${APP_ID}.gschema.xml" "${APPDIR}/usr/share/glib-2.0/schemas/${APP_ID}.gschema.xml"
+install -m 644 "${ROOT_DIR}/data/${APP_ID}.metainfo.xml" "${APPDIR}/usr/share/metainfo/${APP_ID}.metainfo.xml"
 cp -r "${ROOT_DIR}/data/icons/hicolor/"* "${APPDIR}/usr/share/icons/hicolor/"
 
 # Compile gsettings schemas
 glib-compile-schemas "${APPDIR}/usr/share/glib-2.0/schemas"
 
 # Root level desktop file and icon
-cp "${ROOT_DIR}/data/io.github.antonio.Mithrandir.desktop" "${APPDIR}/${APP_ID}.desktop"
+cp "${ROOT_DIR}/data/${APP_ID}.desktop" "${APPDIR}/${APP_ID}.desktop"
 cp "${ROOT_DIR}/data/icons/hicolor/256x256/apps/${APP_ID}.png" "${APPDIR}/${APP_ID}.png"
 cp "${ROOT_DIR}/data/icons/hicolor/256x256/apps/${APP_ID}.png" "${APPDIR}/.DirIcon"
 

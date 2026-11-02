@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.antonio.Mithrandir</id>
+  <id>io.github.antux912012.Mithrandir</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <name>Mithrandir</name>
-  <summary>Native GNU/Linux system cleaner, optimizer, CachyOS scheduler and power manager in Rust</summary>
+  <summary>Linux system optimizer, cleaner and CachyOS scheduler manager</summary>
   <description>
     <p>
-      Mithrandir is a high-performance system maintenance suite, cleaner, and diagnostic toolkit rewritten entirely in Rust with GTK4 and Libadwaita. It delivers instantaneous cleanup scans, deep cache pruning, hardware power management, and granular control over startup services and system processes without background resource overhead.
+      Mithrandir is a high-performance system maintenance suite, cleaner, and kernel utility written in Rust with GTK4 and Libadwaita. It delivers instantaneous cleanup scans, deep cache pruning, hardware power management, and granular control over startup services and system processes without background resource overhead.
     </p>
     <p>
       Designed with a focus on safety and transparency, Mithrandir protects critical operating system paths, respects user sandboxes, and runs diagnostic telemetry off the main UI thread for completely stutter-free operation.
@@ -46,10 +46,16 @@
   </screenshots>
   <url type="homepage">https://github.com/Antux912012/mithrandir</url>
   <url type="bugtracker">https://github.com/Antux912012/mithrandir/issues</url>
-  <developer id="io.github.antonio">
-    <name>Antonio</name>
+  <url type="vcs-browser">https://github.com/Antux912012/mithrandir</url>
+  <url type="contribute">https://github.com/Antux912012/mithrandir</url>
+  <url type="help">https://github.com/Antux912012/mithrandir#readme</url>
+  <developer id="io.github.antux912012">
+    <name>Antux912012</name>
   </developer>
-  <launchable type="desktop-id">io.github.antonio.Mithrandir.desktop</launchable>
+  <provides>
+    <id>io.github.antonio.Mithrandir</id>
+  </provides>
+  <launchable type="desktop-id">io.github.antux912012.Mithrandir.desktop</launchable>
   <branding>
     <color type="primary" scheme_preference="light">#2b7bdd</color>
     <color type="primary" scheme_preference="dark">#174272</color>
@@ -64,12 +70,8 @@
           <li>Strict Flatpak sandbox cache protection preventing accidental configuration or profile deletion.</li>
           <li>Direct support for CachyOS BORE and sched-ext BPF scheduler management.</li>
           <li>Mithrandir presets across system power profiles, CPU governors, EPP, and Turbo Boost.</li>
+          <li>Responsive adaptive GNOME HIG interface with collapsible icon-rail sidebar.</li>
         </ul>
-      </description>
-    </release>
-    <release version="0.4.4" date="2026-10-22">
-      <description>
-        <p>Mithrandir v0.4.4 introduces major codebase optimizations, reliability fixes, and persistent user preferences.</p>
       </description>
     </release>
   </releases>

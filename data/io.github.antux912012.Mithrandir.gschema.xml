@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schemalist gettext-domain="io.github.antonio.Mithrandir">
-  <schema id="io.github.antonio.Mithrandir" path="/io/github/antonio/Mithrandir/">
+<schemalist gettext-domain="io.github.antux912012.Mithrandir">
+  <schema id="io.github.antux912012.Mithrandir" path="/io/github/antux912012/Mithrandir/">
     <key name="window-width" type="i">
-      <default>1080</default>
+      <default>880</default>
       <summary>Window width</summary>
     </key>
     <key name="window-height" type="i">
-      <default>720</default>
+      <default>640</default>
       <summary>Window height</summary>
     </key>
     <key name="is-maximized" type="b">
@@ -19,7 +19,7 @@
     </key>
     <key name="show-panel-indicator" type="b">
       <default>true</default>
-      <summary>Whether to display the Mithrandir applet in the GNOME top bar panel</summary>
+      <summary>Whether to display the Mithrandir applet in the system tray / panel</summary>
     </key>
     <key name="smart-boost-enabled" type="b">
       <default>true</default>
@@ -40,30 +40,6 @@
     <key name="smart-boost-notify" type="b">
       <default>true</default>
       <summary>Whether to notify when Smart Boost triggers</summary>
-    </key>
-    <key name="antivirus-auto-update-before-scan" type="b">
-      <default>false</default>
-      <summary>Automatically run FreshClam before starting malware scans</summary>
-    </key>
-    <key name="antivirus-definitions-max-age-hours" type="i">
-      <default>24</default>
-      <summary>Maximum age of virus definitions in hours before considered stale</summary>
-    </key>
-    <key name="antivirus-auto-quarantine" type="b">
-      <default>true</default>
-      <summary>Automatically quarantine flagged malware files without prompting</summary>
-    </key>
-    <key name="antivirus-daily-scan" type="b">
-      <default>false</default>
-      <summary>Perform a background quick scan every 24 hours</summary>
-    </key>
-    <key name="local-llm-model-path" type="s">
-      <default>""</default>
-      <summary>Path to custom GGUF model for local AI diagnostics</summary>
-    </key>
-    <key name="cloud-ai-provider" type="s">
-      <default>"none"</default>
-      <summary>Selected cloud AI provider ("none", "gemini", "claude")</summary>
     </key>
   </schema>
 </schemalist>

@@ -57,12 +57,12 @@ package() {
     ln -sf /usr/bin/mithrandir "${pkgdir}/usr/bin/mithrandir-rs"
 
     # Install desktop launcher, schema, and AppStream metainfo
-    install -Dm644 data/io.github.antonio.Mithrandir.desktop "${pkgdir}/usr/share/applications/io.github.antonio.Mithrandir.desktop"
-    install -Dm644 data/io.github.antonio.Mithrandir.gschema.xml "${pkgdir}/usr/share/glib-2.0/schemas/io.github.antonio.Mithrandir.gschema.xml"
-    install -Dm644 data/io.github.antonio.Mithrandir.metainfo.xml "${pkgdir}/usr/share/metainfo/io.github.antonio.Mithrandir.metainfo.xml"
+    install -Dm644 data/io.github.antux912012.Mithrandir.desktop "${pkgdir}/usr/share/applications/io.github.antux912012.Mithrandir.desktop"
+    install -Dm644 data/io.github.antux912012.Mithrandir.gschema.xml "${pkgdir}/usr/share/glib-2.0/schemas/io.github.antux912012.Mithrandir.gschema.xml"
+    install -Dm644 data/io.github.antux912012.Mithrandir.metainfo.xml "${pkgdir}/usr/share/metainfo/io.github.antux912012.Mithrandir.metainfo.xml"
 
     # Install Polkit policy
-    install -Dm644 data/io.github.antonio.Mithrandir.policy "${pkgdir}/usr/share/polkit-1/actions/io.github.antonio.Mithrandir.policy"
+    install -Dm644 data/io.github.antux912012.Mithrandir.policy "${pkgdir}/usr/share/polkit-1/actions/io.github.antux912012.Mithrandir.policy"
 
     # Install udev hardware power management rules
     install -Dm644 data/99-mithrandir-power.rules "${pkgdir}/usr/lib/udev/rules.d/99-mithrandir-power.rules"

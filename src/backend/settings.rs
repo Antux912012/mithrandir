@@ -35,7 +35,15 @@ static SETTINGS_INSTANCE: OnceLock<Mutex<AppSettings>> = OnceLock::new();
 impl AppSettings {
     pub fn config_path() -> PathBuf {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-        PathBuf::from(home).join(".config/io.github.antonio.Mithrandir/settings.json")
+        let modern = PathBuf::from(&home).join(".config/io.github.antux912012.Mithrandir/settings.json");
+        if modern.exists() {
+            return modern;
+        }
+        let legacy = PathBuf::from(&home).join(".config/io.github.antonio.Mithrandir/settings.json");
+        if legacy.exists() {
+            return legacy;
+        }
+        modern
     }
 
     pub fn load() -> Self {

@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${ROOT_DIR}"
 
 VERSION=$(grep -m1 '^version' "${ROOT_DIR}/Cargo.toml" | sed -E 's/.*"([^"]+)".*/\1/')
-APP_ID="io.github.antonio.Mithrandir"
+APP_ID="io.github.antux912012.Mithrandir"
 BUNDLE_PATH="${ROOT_DIR}/mithrandir_${VERSION}.flatpak"
 
 echo "==> Staging Mithrandir Flatpak build (v${VERSION})..."
@@ -32,9 +32,9 @@ flatpak build-init "${BUILD_DIR}" "${APP_ID}" org.gnome.Platform org.gnome.Platf
 echo "==> Staging application files into /app..."
 mkdir -p "${BUILD_DIR}/files"/{bin,share/applications,share/glib-2.0/schemas,share/metainfo,share/icons/hicolor}
 install -m 755 "${ROOT_DIR}/target/release/mithrandir" "${BUILD_DIR}/files/bin/mithrandir"
-install -m 644 "${ROOT_DIR}/data/io.github.antonio.Mithrandir.desktop" "${BUILD_DIR}/files/share/applications/${APP_ID}.desktop"
-install -m 644 "${ROOT_DIR}/data/io.github.antonio.Mithrandir.gschema.xml" "${BUILD_DIR}/files/share/glib-2.0/schemas/${APP_ID}.gschema.xml"
-install -m 644 "${ROOT_DIR}/data/io.github.antonio.Mithrandir.metainfo.xml" "${BUILD_DIR}/files/share/metainfo/${APP_ID}.metainfo.xml"
+install -m 644 "${ROOT_DIR}/data/${APP_ID}.desktop" "${BUILD_DIR}/files/share/applications/${APP_ID}.desktop"
+install -m 644 "${ROOT_DIR}/data/${APP_ID}.gschema.xml" "${BUILD_DIR}/files/share/glib-2.0/schemas/${APP_ID}.gschema.xml"
+install -m 644 "${ROOT_DIR}/data/${APP_ID}.metainfo.xml" "${BUILD_DIR}/files/share/metainfo/${APP_ID}.metainfo.xml"
 cp -r "${ROOT_DIR}/data/icons/hicolor/"* "${BUILD_DIR}/files/share/icons/hicolor/"
 
 glib-compile-schemas "${BUILD_DIR}/files/share/glib-2.0/schemas"

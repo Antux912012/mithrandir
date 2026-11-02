@@ -1,12 +1,12 @@
 [Desktop Entry]
 Name=Mithrandir
-GenericName=System Cleaner, Optimizer and Hardware Power Saver
-Comment=Modern GNU/Linux Cleaner, Optimizer, Hardware Power Saver, Telemetry & Diagnostics in Rust
+GenericName=System Cleaner, Optimizer and Hardware Power Manager
+Comment=Native Linux system cleaner, optimizer, CachyOS scheduler and hardware power manager
 Exec=mithrandir %U
-Icon=io.github.antonio.Mithrandir
+Icon=io.github.antux912012.Mithrandir
 Terminal=false
 Type=Application
-Categories=Utility;System;
+Categories=System;Settings;
 StartupNotify=true
 Actions=smart-boost;monitor;background;
 

@@ -26,6 +26,9 @@ use crate::ui::uninstaller::UninstallerPage;
 pub struct MithrandirWindow;
 
 impl MithrandirWindow {
+    pub const EXPANDED_WIDTH: i32 = 220;
+    pub const COLLAPSED_WIDTH: i32 = 56;
+
     pub fn build(app: &adw::Application) -> ApplicationWindow {
         ThemeManager::apply_theme();
 
@@ -46,12 +49,13 @@ impl MithrandirWindow {
         let title_widget = WindowTitle::new("Mithrandir", "Dashboard");
         header_bar.set_title_widget(Some(&title_widget));
 
-        // Top Left Toggle Box aligned strictly with the sidebar icon column (64px width)
+        // Top Left Toggle Box aligned strictly with the sidebar icon column (56px width)
         let toggle_box = GtkBox::builder()
             .orientation(Orientation::Horizontal)
-            .width_request(64)
+            .width_request(Self::COLLAPSED_WIDTH)
             .halign(Align::Center)
             .valign(Align::Center)
+            .hexpand(false)
             .build();
 
         let menu_btn = Button::builder()
@@ -119,25 +123,26 @@ impl MithrandirWindow {
             ("grub", "GRUB Bootloader", "preferences-system-symbolic"),
         ];
 
-        // Sidebar Container (Expanded: 220px, Collapsed: 64px)
+        // Sidebar Container: STRICTLY hexpand = false so it never steals width from content
         let sidebar_box = GtkBox::builder()
             .orientation(Orientation::Vertical)
-            .width_request(220)
+            .hexpand(false)
             .vexpand(true)
             .build();
+        sidebar_box.set_size_request(Self::EXPANDED_WIDTH, -1);
         sidebar_box.add_css_class("sidebar");
 
         let sidebar_scroller = ScrolledWindow::builder()
-            .hexpand(true)
+            .hexpand(false)
             .vexpand(true)
             .hscrollbar_policy(PolicyType::Never)
+            .vscrollbar_policy(PolicyType::Automatic)
             .build();
 
-        let list_box = ListBox::builder().build();
+        let list_box = ListBox::builder()
+            .selection_mode(gtk4::SelectionMode::Single)
+            .build();
         list_box.add_css_class("navigation-sidebar");
-
-        let stack_rc = Rc::new(stack.clone());
-        let title_rc = Rc::new(title_widget.clone());
 
         let mut nav_items = Vec::new();
 
@@ -145,15 +150,15 @@ impl MithrandirWindow {
             let row = ListBoxRow::new();
             let row_box = GtkBox::builder()
                 .orientation(Orientation::Horizontal)
-                .spacing(12)
-                .margin_top(8)
-                .margin_bottom(8)
-                .margin_start(10)
-                .margin_end(10)
+                .spacing(10)
+                .margin_top(6)
+                .margin_bottom(6)
+                .margin_start(8)
+                .margin_end(8)
                 .build();
 
             let icon = Image::from_icon_name(icon_name);
-            icon.set_pixel_size(18);
+            icon.set_pixel_size(20);
 
             let lbl = Label::builder()
                 .label(label_str)
@@ -166,17 +171,7 @@ impl MithrandirWindow {
             row.set_child(Some(&row_box));
             list_box.append(&row);
 
-            let stack_clone = stack_rc.clone();
-            let title_clone = title_rc.clone();
-            let id_str = id.to_string();
-            let title_str = label_str.to_string();
-
-            row.connect_activate(move |_| {
-                stack_clone.set_visible_child_name(&id_str);
-                title_clone.set_subtitle(&title_str);
-            });
-
-            nav_items.push((icon, lbl, row.clone(), label_str.to_string()));
+            nav_items.push((icon, lbl, row.clone(), label_str.to_string(), id));
         }
 
         sidebar_scroller.set_child(Some(&list_box));
@@ -194,18 +189,18 @@ impl MithrandirWindow {
             Rc::new(move |expanded: bool| {
                 is_expanded.set(expanded);
                 if expanded {
-                    sidebar_box.set_width_request(220);
+                    sidebar_box.set_size_request(Self::EXPANDED_WIDTH, -1);
                     menu_btn.set_tooltip_text(Some("Collapse Sidebar"));
-                    for (icon, lbl, row, _title) in nav_items.iter() {
+                    for (icon, lbl, row, _title, _) in nav_items.iter() {
                         lbl.set_visible(true);
                         icon.set_hexpand(false);
                         icon.set_halign(Align::Start);
                         row.set_tooltip_text(None);
                     }
                 } else {
-                    sidebar_box.set_width_request(64);
+                    sidebar_box.set_size_request(Self::COLLAPSED_WIDTH, -1);
                     menu_btn.set_tooltip_text(Some("Expand Sidebar"));
-                    for (icon, lbl, row, title) in nav_items.iter() {
+                    for (icon, lbl, row, title, _) in nav_items.iter() {
                         lbl.set_visible(false);
                         icon.set_hexpand(true);
                         icon.set_halign(Align::Center);
@@ -237,8 +232,9 @@ impl MithrandirWindow {
         });
         window.add_breakpoint(breakpoint);
 
-        let stack_for_nav = stack_rc.clone();
-        let title_for_nav = title_rc.clone();
+        // Navigation row selection: single source of truth
+        let stack_for_nav = stack.clone();
+        let title_for_nav = title_widget.clone();
 
         list_box.connect_row_selected(move |_, row_opt| {
             if let Some(row) = row_opt {
@@ -251,7 +247,12 @@ impl MithrandirWindow {
             }
         });
 
-        // Main Horizontal View: [Sidebar] | [Separator] | [Stack]
+        // Highlight first item ("Dashboard") at startup
+        if let Some(first_row) = list_box.row_at_index(0) {
+            list_box.select_row(Some(&first_row));
+        }
+
+        // Main Horizontal View: [Sidebar (fixed width)] | [Separator] | [Stack (hexpand true)]
         let main_box = GtkBox::builder()
             .orientation(Orientation::Horizontal)
             .hexpand(true)
@@ -284,10 +285,10 @@ impl MithrandirWindow {
             if let Some(win) = win_weak_about.upgrade() {
                 let about = AboutDialog::builder()
                     .application_name("Mithrandir")
-                    .application_icon("io.github.antonio.Mithrandir")
-                    .developer_name("Antonio")
+                    .application_icon("io.github.antux912012.Mithrandir")
+                    .developer_name("Antux912012")
                     .version("1.0.0")
-                    .comments("Native Linux System Optimization, Cache Management, CachyOS Scheduler Controller & Hybrid GPU Power Utility in Rust (GTK4 & Libadwaita)")
+                    .comments("Native Linux System Optimization, Cache Management, CachyOS Scheduler Controller & Hardware Power Manager in Rust (GTK4 & Libadwaita)")
                     .website("https://github.com/Antux912012/mithrandir")
                     .license_type(gtk4::License::Gpl30Only)
                     .build();

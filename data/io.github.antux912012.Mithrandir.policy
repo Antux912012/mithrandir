@@ -5,7 +5,7 @@
   <vendor>Mithrandir</vendor>
   <vendor_url>https://github.com/Antux912012/mithrandir</vendor_url>
 
-  <action id="io.github.antonio.Mithrandir.apply-kernel-state">
+  <action id="io.github.antux912012.Mithrandir.apply-kernel-state">
     <description>Apply Mithrandir Kernel and Power Tunables</description>
     <message>Authentication is required to apply kernel scheduler and power optimizations</message>
     <defaults>

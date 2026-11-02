@@ -28,7 +28,7 @@ impl BtrfsPage {
         let is_btrfs = BtrfsManager::is_btrfs_available();
 
         let status_group = PreferencesGroup::builder()
-            .title("BTRFS Subvolumes & Snapshots")
+            .title("BTRFS Subvolumes &amp; Snapshots")
             .description("Manage system restore points and subvolumes")
             .build();
 

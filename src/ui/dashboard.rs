@@ -373,7 +373,7 @@ impl DashboardPage {
 
         // 3. Hardware & Power Management
         let power_group = PreferencesGroup::builder()
-            .title("Hardware & Power Management")
+            .title("Hardware &amp; Power Management")
             .description("Hardware-level power saving policies for CPU and PCIe bus")
             .build();
 
@@ -419,7 +419,7 @@ impl DashboardPage {
         };
 
         let kernel_row = ActionRow::builder()
-            .title("Kernel & CPU Scheduler")
+            .title("Kernel &amp; CPU Scheduler")
             .subtitle(&format!("Release: {} | {}", kinfo.kernel_release, sched_name))
             .build();
         kernel_row.add_prefix(&Image::from_icon_name("cpu-symbolic"));

@@ -31,7 +31,7 @@ impl KernelPowerPage {
         // 1. Quick Presets Group
         // ---------------------------------------------------------
         let preset_group = PreferencesGroup::builder()
-            .title("System Power & Scheduler Presets")
+            .title("System Power &amp; Scheduler Presets")
             .description("Coordinated hardware power profile, CPU scaling governor, and kernel scheduler")
             .build();
 
@@ -110,7 +110,7 @@ impl KernelPowerPage {
         // 2. Kernel & CachyOS Scheduler Group
         // ---------------------------------------------------------
         let sched_group = PreferencesGroup::builder()
-            .title("Kernel & CPU Schedulers")
+            .title("Kernel &amp; CPU Schedulers")
             .description("CachyOS BORE and sched-ext (SCX) userspace BPF scheduler configuration")
             .build();
 
@@ -219,7 +219,7 @@ impl KernelPowerPage {
         // 3. CPU Frequency Scaling & Power Profile Group
         // ---------------------------------------------------------
         let cpu_group = PreferencesGroup::builder()
-            .title("CPU Frequency & Energy Performance")
+            .title("CPU Frequency &amp; Energy Performance")
             .description("Hardware cpufreq governors, Energy Performance Preferences (EPP), and Turbo Boost")
             .build();
 
@@ -349,7 +349,7 @@ impl KernelPowerPage {
         // 4. PCIe Bus & Persistence Group
         // ---------------------------------------------------------
         let pcie_group = PreferencesGroup::builder()
-            .title("Bus Power & Persistence")
+            .title("Bus Power &amp; Persistence")
             .description("PCIe Active State Power Management (ASPM) and boot-time persistent tunables")
             .build();
 
