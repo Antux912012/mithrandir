@@ -30,14 +30,28 @@ echo "==> Initializing Flatpak environment with native flatpak tool..."
 flatpak build-init "${BUILD_DIR}" "${APP_ID}" org.gnome.Platform org.gnome.Platform 50
 
 echo "==> Staging application files into /app..."
-mkdir -p "${BUILD_DIR}/files"/{bin,share/applications,share/glib-2.0/schemas,share/metainfo,share/icons/hicolor}
+mkdir -p "${BUILD_DIR}/files"/{bin,share/applications,share/glib-2.0/schemas,share/metainfo,share/appdata,share/icons/hicolor,share/mithrandir/screenshots,share/app-info/media/${APP_ID}}
 install -m 755 "${ROOT_DIR}/target/release/mithrandir" "${BUILD_DIR}/files/bin/mithrandir"
 install -m 644 "${ROOT_DIR}/data/${APP_ID}.desktop" "${BUILD_DIR}/files/share/applications/${APP_ID}.desktop"
 install -m 644 "${ROOT_DIR}/data/${APP_ID}.gschema.xml" "${BUILD_DIR}/files/share/glib-2.0/schemas/${APP_ID}.gschema.xml"
 install -m 644 "${ROOT_DIR}/data/${APP_ID}.metainfo.xml" "${BUILD_DIR}/files/share/metainfo/${APP_ID}.metainfo.xml"
+install -m 644 "${ROOT_DIR}/data/${APP_ID}.metainfo.xml" "${BUILD_DIR}/files/share/appdata/${APP_ID}.appdata.xml"
 cp -r "${ROOT_DIR}/data/icons/hicolor/"* "${BUILD_DIR}/files/share/icons/hicolor/"
 
+# Stage screenshots for Software Center and offline media caches
+if [[ -d "${ROOT_DIR}/data/screenshots" ]]; then
+  echo "==> Staging application screenshots into AppStream media paths..."
+  cp "${ROOT_DIR}/data/screenshots/"* "${BUILD_DIR}/files/share/mithrandir/screenshots/"
+  cp "${ROOT_DIR}/data/screenshots/"* "${BUILD_DIR}/files/share/app-info/media/${APP_ID}/"
+fi
+
 glib-compile-schemas "${BUILD_DIR}/files/share/glib-2.0/schemas"
+
+# Generate AppStream catalog metadata and cached icons for Software Center
+echo "==> Composing AppStream metadata catalog for Software Centers..."
+podman run --rm --userns=keep-id \
+  -v "${ROOT_DIR}:/workspace:Z" localhost/dev-fedora \
+  appstream-compose --prefix=/workspace/target/pkg-flatpak/files --basename="${APP_ID}" --origin=flatpak "${APP_ID}"
 
 echo "==> Finalizing Flatpak permissions and metadata..."
 flatpak build-finish "${BUILD_DIR}" \
@@ -61,6 +75,9 @@ flatpak build-finish "${BUILD_DIR}" \
 
 echo "==> Exporting to OSTree repository..."
 flatpak build-export "${REPO_DIR}" "${BUILD_DIR}" master
+
+echo "==> Updating OSTree repository AppStream catalog and summary..."
+flatpak build-update-repo --generate-static-deltas "${REPO_DIR}"
 
 echo "==> Exporting Flatpak Single-File Bundle..."
 flatpak build-bundle "${REPO_DIR}" "${BUNDLE_PATH}" "${APP_ID}" master

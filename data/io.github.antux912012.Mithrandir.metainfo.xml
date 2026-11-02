@@ -22,25 +22,46 @@
       <li>Adaptive Libadwaita Interface: Responsive layout conforming strictly to GNOME HIG on desktop and mobile screens</li>
     </ul>
   </description>
+  <categories>
+    <category>System</category>
+    <category>Settings</category>
+    <category>Utility</category>
+    <category>Monitor</category>
+  </categories>
+  <keywords>
+    <keyword>cleaner</keyword>
+    <keyword>optimizer</keyword>
+    <keyword>cachyos</keyword>
+    <keyword>scheduler</keyword>
+    <keyword>bore</keyword>
+    <keyword>eevdf</keyword>
+    <keyword>scx</keyword>
+    <keyword>power</keyword>
+    <keyword>telemetry</keyword>
+    <keyword>cache</keyword>
+    <keyword>boost</keyword>
+    <keyword>hardware</keyword>
+    <keyword>system</keyword>
+  </keywords>
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/01-dashboard.png</image>
+      <image width="1416" height="939">https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/01-dashboard.png</image>
       <caption>Mithrandir real-time hardware telemetry and one-click Smart Boost</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/02-kernel-power.png</image>
+      <image width="1416" height="939">https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/02-kernel-power.png</image>
       <caption>CachyOS BORE and sched-ext BPF scheduler management with system power presets</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/03-cleaner.png</image>
+      <image width="1416" height="939">https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/03-cleaner.png</image>
       <caption>Multi-category cache cleaner with strict Flatpak sandbox guardrails</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/04-uninstaller.png</image>
+      <image width="1416" height="939">https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/04-uninstaller.png</image>
       <caption>Multi-backend software uninstaller for Native, Flatpak, Snap, and Pip packages</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/05-grub.png</image>
+      <image width="1416" height="939">https://raw.githubusercontent.com/Antux912012/mithrandir/main/data/screenshots/05-grub.png</image>
       <caption>GRUB bootloader kernel parameters and timeout management</caption>
     </screenshot>
   </screenshots>
