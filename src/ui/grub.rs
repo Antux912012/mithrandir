@@ -1,17 +1,22 @@
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
-    Align, Box as GtkBox, Button, Entry, Orientation, ScrolledWindow, SpinButton,
+    Align, Box as GtkBox, Button, Entry, Image, Orientation, ScrolledWindow, SpinButton,
 };
 use libadwaita as adw;
 use adw::prelude::*;
-use adw::{ActionRow, Clamp, PreferencesGroup};
-use crate::backend::grub::GrubManager;
+use adw::{ActionRow, Clamp, PreferencesGroup, Toast, ToastOverlay};
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::Duration;
+
+use crate::backend::grub::{GrubLiveStatus, GrubManager};
+use crate::backend::indicator::NotificationManager;
 
 pub struct GrubPage;
 
 impl GrubPage {
-    pub fn build() -> ScrolledWindow {
+    pub fn build(toast_overlay: Option<ToastOverlay>) -> ScrolledWindow {
         let scrolled = ScrolledWindow::builder()
             .vexpand(true)
             .hexpand(true)
@@ -27,96 +32,354 @@ impl GrubPage {
             .build();
 
         let cfg = GrubManager::read_config();
+        let toast_overlay_rc = Rc::new(toast_overlay);
 
-        let group = PreferencesGroup::builder()
-            .title("GRUB Bootloader Configuration")
-            .description("Customize system boot menu delay and default kernel")
+        // ---------------------------------------------------------
+        // 1. Real-Time Monitoring & Telemetry Group
+        // ---------------------------------------------------------
+        let live_group = PreferencesGroup::builder()
+            .title("Live GRUB File Telemetry")
+            .description("Real-time monitoring of host bootloader state and configuration")
+            .build();
+
+        let path_row = ActionRow::builder()
+            .title("Monitored Configuration File")
+            .subtitle(format_cfg_subtitle(&cfg.live_status))
+            .build();
+        path_row.add_prefix(&Image::from_icon_name("application-x-firmware-symbolic"));
+
+        let refresh_btn = Button::builder()
+            .icon_name("view-refresh-symbolic")
+            .tooltip_text("Check Live Status Now")
+            .valign(Align::Center)
+            .css_classes(vec!["flat"])
+            .build();
+        path_row.add_suffix(&refresh_btn);
+        live_group.add(&path_row);
+
+        let mtime_row = ActionRow::builder()
+            .title("Last Generated / Modified")
+            .subtitle(&cfg.live_status.cfg_modified_time)
+            .build();
+        mtime_row.add_prefix(&Image::from_icon_name("preferences-system-time-symbolic"));
+        live_group.add(&mtime_row);
+
+        root_box.append(&live_group);
+
+        // ---------------------------------------------------------
+        // 2. Backup & Disaster Recovery Group (grub.cfg.bak)
+        // ---------------------------------------------------------
+        let backup_group = PreferencesGroup::builder()
+            .title("Configuration Backup & Disaster Recovery (grub.cfg.bak)")
+            .description("Create, monitor, and restore original boot configuration")
+            .build();
+
+        let backup_status_row = ActionRow::builder()
+            .title("Backup Snapshot File")
+            .subtitle(format_backup_subtitle(&cfg.live_status))
+            .build();
+        backup_status_row.add_prefix(&Image::from_icon_name("document-save-symbolic"));
+        backup_group.add(&backup_status_row);
+
+        let backup_actions_box = GtkBox::builder()
+            .orientation(Orientation::Horizontal)
+            .spacing(12)
+            .halign(Align::End)
+            .margin_top(8)
+            .margin_bottom(8)
+            .build();
+
+        let create_bak_btn = Button::builder()
+            .label("Create Backup (grub.cfg.bak)")
+            .icon_name("document-save-symbolic")
+            .css_classes(vec!["suggested-action"])
+            .valign(Align::Center)
+            .build();
+
+        let restore_bak_btn = Button::builder()
+            .label("Restore Configuration")
+            .icon_name("edit-undo-symbolic")
+            .css_classes(vec!["destructive-action"])
+            .sensitive(cfg.live_status.backup_exists)
+            .valign(Align::Center)
+            .build();
+
+        backup_actions_box.append(&create_bak_btn);
+        backup_actions_box.append(&restore_bak_btn);
+
+        let backup_actions_row = ActionRow::builder()
+            .title("Disaster Recovery Actions")
+            .subtitle("Generate an instant backup or recover the original bootloader state")
+            .child(&backup_actions_box)
+            .build();
+        backup_group.add(&backup_actions_row);
+
+        root_box.append(&backup_group);
+
+        // ---------------------------------------------------------
+        // 3. Bootloader Parameters Group
+        // ---------------------------------------------------------
+        let params_group = PreferencesGroup::builder()
+            .title("GRUB Bootloader Parameters")
+            .description("Customize system boot menu delay, default kernel, and boot arguments")
             .build();
 
         // Timeout row
         let timeout_row = ActionRow::builder()
             .title("Boot Menu Timeout (seconds)")
-            .subtitle("Number of seconds before automatically booting default selection")
+            .subtitle("Seconds before automatically booting default selection (0 = immediate)")
             .build();
 
-        let timeout_spin = SpinButton::with_range(0.0, 30.0, 1.0);
+        let timeout_spin = SpinButton::with_range(0.0, 60.0, 1.0);
         timeout_spin.set_value(cfg.timeout as f64);
         timeout_spin.set_valign(Align::Center);
         timeout_row.add_suffix(&timeout_spin);
-        group.add(&timeout_row);
+        params_group.add(&timeout_row);
 
         // Default entry row
         let default_row = ActionRow::builder()
             .title("Default Boot Entry")
-            .subtitle("Index or name of the kernel to boot by default")
+            .subtitle("Index (0, 1, ...) or name of the kernel to boot by default")
             .build();
 
         let default_entry = Entry::builder()
             .text(&cfg.default_entry)
             .valign(Align::Center)
+            .width_request(240)
             .build();
         default_row.add_suffix(&default_entry);
-        group.add(&default_row);
+        params_group.add(&default_row);
 
-        // Kernel Cmdline row
+        // Kernel Boot Parameters row
         let cmdline_row = ActionRow::builder()
             .title("Kernel Boot Parameters")
-            .subtitle(&cfg.cmdline)
+            .subtitle("Command-line parameters passed to the Linux kernel (GRUB_CMDLINE_LINUX_DEFAULT)")
             .build();
-        group.add(&cmdline_row);
 
-        root_box.append(&group);
+        let cmdline_entry = Entry::builder()
+            .text(&cfg.cmdline)
+            .valign(Align::Center)
+            .hexpand(true)
+            .width_request(320)
+            .build();
+        cmdline_row.add_suffix(&cmdline_entry);
+        params_group.add(&cmdline_row);
 
-        // Save Button
+        root_box.append(&params_group);
+
+        // ---------------------------------------------------------
+        // 4. Save & Update Action Bar
+        // ---------------------------------------------------------
         let btn_box = GtkBox::builder()
             .orientation(Orientation::Horizontal)
             .halign(Align::End)
+            .spacing(12)
             .build();
 
         let save_btn = Button::builder()
             .label("Save & Update GRUB")
+            .icon_name("emblem-default-symbolic")
             .css_classes(vec!["suggested-action"])
             .build();
         btn_box.append(&save_btn);
         root_box.append(&btn_box);
 
-        let (sender, receiver) = async_channel::unbounded::<Result<(), String>>();
-        let s_btn = save_btn.clone();
+        // ---------------------------------------------------------
+        // 5. Real-Time File Monitoring Controller
+        // ---------------------------------------------------------
+        let path_row_clone = path_row.clone();
+        let mtime_row_clone = mtime_row.clone();
+        let backup_row_clone = backup_status_row.clone();
+        let restore_btn_clone = restore_bak_btn.clone();
+        let last_status = Rc::new(RefCell::new(cfg.live_status.clone()));
+
+        let update_live_status = {
+            let last_status = last_status.clone();
+            let path_row = path_row_clone.clone();
+            let mtime_row = mtime_row_clone.clone();
+            let backup_row = backup_row_clone.clone();
+            let restore_btn = restore_btn_clone.clone();
+            Rc::new(move || {
+                let cur = GrubManager::get_live_status();
+                if cur != *last_status.borrow() {
+                    path_row.set_subtitle(&format_cfg_subtitle(&cur));
+                    mtime_row.set_subtitle(&cur.cfg_modified_time);
+                    backup_row.set_subtitle(&format_backup_subtitle(&cur));
+                    restore_btn.set_sensitive(cur.backup_exists);
+                    *last_status.borrow_mut() = cur;
+                }
+            })
+        };
+
+        // Real-time interval polling every 2 seconds
+        let timer_update = update_live_status.clone();
+        glib::timeout_add_local(Duration::from_secs(2), move || {
+            timer_update();
+            glib::ControlFlow::Continue
+        });
+
+        // Manual refresh button
+        let manual_update = update_live_status.clone();
+        refresh_btn.connect_clicked(move |_| {
+            manual_update();
+        });
+
+        // ---------------------------------------------------------
+        // 6. Connect Backup Button (Async Channel)
+        // ---------------------------------------------------------
+        let (tx_bak, rx_bak) = async_channel::unbounded::<Result<String, String>>();
+        let btn_bak_ref = create_bak_btn.clone();
+        let update_live_bak = update_live_status.clone();
+        let overlay_bak = toast_overlay_rc.clone();
+
         glib::MainContext::default().spawn_local(async move {
-            while let Ok(result) = receiver.recv().await {
-                s_btn.set_sensitive(true);
-                s_btn.set_label("Save & Update GRUB");
-                match result {
-                    Ok(_) => {
-                        crate::backend::indicator::NotificationManager::send_notification(
-                            "⚙️ GRUB Updated",
-                            "Bootloader configuration was successfully updated.",
-                        );
+            while let Ok(res) = rx_bak.recv().await {
+                btn_bak_ref.set_sensitive(true);
+                btn_bak_ref.set_label("Create Backup (grub.cfg.bak)");
+                update_live_bak();
+
+                match res {
+                    Ok(msg) => {
+                        NotificationManager::send_notification("💾 GRUB Backup Created", &msg);
+                        if let Some(ref o) = overlay_bak.as_ref() {
+                            let toast = Toast::new(&msg);
+                            toast.set_timeout(3);
+                            o.add_toast(toast);
+                        }
                     }
                     Err(err) => {
-                        crate::backend::indicator::NotificationManager::send_notification(
-                            "⚠️ GRUB Update Failed",
-                            &format!("Could not update GRUB: {}", err),
-                        );
+                        NotificationManager::send_notification("⚠️ GRUB Backup Failed", &err);
+                        if let Some(ref o) = overlay_bak.as_ref() {
+                            let toast = Toast::new(&format!("Backup failed: {}", err));
+                            toast.set_timeout(3);
+                            o.add_toast(toast);
+                        }
                     }
                 }
             }
         });
 
-        let spin_clone = timeout_spin.clone();
-        let entry_clone = default_entry.clone();
-        let save_clone = save_btn.clone();
-        let sender_clone = sender.clone();
+        let btn_bak_click = create_bak_btn.clone();
+        create_bak_btn.connect_clicked(move |_| {
+            btn_bak_click.set_sensitive(false);
+            btn_bak_click.set_label("Backing up...");
+            let tx = tx_bak.clone();
+            std::thread::spawn(move || {
+                let res = GrubManager::create_backup();
+                let _ = tx.send_blocking(res);
+            });
+        });
+
+        // ---------------------------------------------------------
+        // 7. Connect Restore Button (Async Channel)
+        // ---------------------------------------------------------
+        let (tx_rst, rx_rst) = async_channel::unbounded::<Result<String, String>>();
+        let btn_rst_ref = restore_bak_btn.clone();
+        let update_live_rst = update_live_status.clone();
+        let overlay_rst = toast_overlay_rc.clone();
+        let spin_rst = timeout_spin.clone();
+        let entry_rst = default_entry.clone();
+        let cmdline_rst = cmdline_entry.clone();
+
+        glib::MainContext::default().spawn_local(async move {
+            while let Ok(res) = rx_rst.recv().await {
+                btn_rst_ref.set_sensitive(true);
+                btn_rst_ref.set_label("Restore Configuration");
+                update_live_rst();
+
+                match res {
+                    Ok(msg) => {
+                        let fresh = GrubManager::read_config();
+                        spin_rst.set_value(fresh.timeout as f64);
+                        entry_rst.set_text(&fresh.default_entry);
+                        cmdline_rst.set_text(&fresh.cmdline);
+
+                        NotificationManager::send_notification("🔄 GRUB Restored", &msg);
+                        if let Some(ref o) = overlay_rst.as_ref() {
+                            let toast = Toast::new(&msg);
+                            toast.set_timeout(3);
+                            o.add_toast(toast);
+                        }
+                    }
+                    Err(err) => {
+                        NotificationManager::send_notification("⚠️ GRUB Restore Failed", &err);
+                        if let Some(ref o) = overlay_rst.as_ref() {
+                            let toast = Toast::new(&format!("Restore failed: {}", err));
+                            toast.set_timeout(3);
+                            o.add_toast(toast);
+                        }
+                    }
+                }
+            }
+        });
+
+        let btn_rst_click = restore_bak_btn.clone();
+        restore_bak_btn.connect_clicked(move |_| {
+            btn_rst_click.set_sensitive(false);
+            btn_rst_click.set_label("Restoring...");
+            let tx = tx_rst.clone();
+            std::thread::spawn(move || {
+                let res = GrubManager::restore_backup();
+                let _ = tx.send_blocking(res);
+            });
+        });
+
+        // ---------------------------------------------------------
+        // 8. Connect Save & Update GRUB Button (Async Channel)
+        // ---------------------------------------------------------
+        let (tx_save, rx_save) = async_channel::unbounded::<Result<(), String>>();
+        let btn_save_ref = save_btn.clone();
+        let update_live_save = update_live_status.clone();
+        let overlay_save = toast_overlay_rc.clone();
+
+        glib::MainContext::default().spawn_local(async move {
+            while let Ok(res) = rx_save.recv().await {
+                btn_save_ref.set_sensitive(true);
+                btn_save_ref.set_label("Save & Update GRUB");
+                update_live_save();
+
+                match res {
+                    Ok(_) => {
+                        NotificationManager::send_notification(
+                            "⚙️ GRUB Updated",
+                            "Bootloader configuration saved and updated successfully.",
+                        );
+                        if let Some(ref o) = overlay_save.as_ref() {
+                            let toast = Toast::new("Bootloader configuration updated.");
+                            toast.set_timeout(3);
+                            o.add_toast(toast);
+                        }
+                    }
+                    Err(err) => {
+                        NotificationManager::send_notification(
+                            "⚠️ GRUB Update Failed",
+                            &format!("Could not update GRUB: {}", err),
+                        );
+                        if let Some(ref o) = overlay_save.as_ref() {
+                            let toast = Toast::new(&format!("Update error: {}", err));
+                            toast.set_timeout(3);
+                            o.add_toast(toast);
+                        }
+                    }
+                }
+            }
+        });
+
+        let btn_save_click = save_btn.clone();
+        let spin_save = timeout_spin.clone();
+        let entry_save = default_entry.clone();
+        let cmdline_save = cmdline_entry.clone();
 
         save_btn.connect_clicked(move |_| {
-            save_clone.set_sensitive(false);
-            save_clone.set_label("Updating GRUB...");
-            let timeout = spin_clone.value() as i32;
-            let def = entry_clone.text().to_string();
-            let tx = sender_clone.clone();
+            btn_save_click.set_sensitive(false);
+            btn_save_click.set_label("Updating GRUB...");
+            let timeout = spin_save.value() as i32;
+            let def = entry_save.text().to_string();
+            let cmd = cmdline_save.text().to_string();
+            let tx = tx_save.clone();
 
             std::thread::spawn(move || {
-                let res = GrubManager::save_and_update(timeout, &def);
+                let res = GrubManager::save_and_update(timeout, &def, Some(&cmd));
                 let _ = tx.send_blocking(res);
             });
         });
@@ -128,5 +391,23 @@ impl GrubPage {
         scrolled.set_child(Some(&clamp));
 
         scrolled
+    }
+}
+
+fn format_cfg_subtitle(status: &GrubLiveStatus) -> String {
+    if status.cfg_exists {
+        let kb = (status.cfg_size_bytes as f64) / 1024.0;
+        format!("🟢 {} ({:.1} KB) — Live Monitored", status.cfg_path, kb)
+    } else {
+        format!("⚠️ {} (Not detected on filesystem)", status.cfg_path)
+    }
+}
+
+fn format_backup_subtitle(status: &GrubLiveStatus) -> String {
+    if status.backup_exists {
+        let kb = (status.backup_size_bytes as f64) / 1024.0;
+        format!("✅ {} ({:.1} KB) • Modified: {}", status.backup_path, kb, status.backup_modified_time)
+    } else {
+        format!("No backup file created yet ({})", status.backup_path)
     }
 }

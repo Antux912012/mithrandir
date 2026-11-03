@@ -104,7 +104,7 @@ impl MithrandirWindow {
         let page_autostart = AutostartPage::build();
         let page_uninstaller = UninstallerPage::build();
         let page_btrfs = BtrfsPage::build();
-        let page_grub = GrubPage::build();
+        let page_grub = GrubPage::build(Some(toast_overlay.clone()));
 
         stack.add_titled(&page_dashboard, Some("dashboard"), "Dashboard");
         stack.add_titled(&page_hardware, Some("hardware"), "Hardware");
