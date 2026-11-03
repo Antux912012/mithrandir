@@ -26,7 +26,14 @@ pub const GRUB_CFG_CANDIDATES: &[&str] = &[
 
 pub const GRUB_DEFAULT_CANDIDATES: &[&str] = &[
     "/etc/default/grub",
+    "/etc/sysconfig/grub",
     "/run/host/etc/default/grub",
+    "/run/host/etc/sysconfig/grub",
+];
+
+pub const GRUB_DEFAULT_D_CANDIDATES: &[&str] = &[
+    "/etc/default/grub.d",
+    "/run/host/etc/default/grub.d",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -39,6 +46,17 @@ pub struct GrubLiveStatus {
     pub backup_exists: bool,
     pub backup_size_bytes: u64,
     pub backup_modified_time: String,
+
+    pub default_path: String,
+    pub default_exists: bool,
+    pub default_size_bytes: u64,
+    pub default_modified_time: String,
+    pub default_backup_path: String,
+    pub default_backup_exists: bool,
+    pub default_backup_size_bytes: u64,
+    pub default_backup_modified_time: String,
+    pub default_dropins_dir: Option<String>,
+    pub default_dropins_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,7 +93,36 @@ impl GrubManager {
         PathBuf::from("/etc/default/grub")
     }
 
-    /// Derives the backup file path for a given grub.cfg.
+    /// Detects if an /etc/default/grub.d directory exists on the system.
+    pub fn detect_default_grub_d_dir() -> Option<PathBuf> {
+        for candidate in GRUB_DEFAULT_D_CANDIDATES {
+            let p = Path::new(candidate);
+            if p.is_dir() {
+                return Some(p.to_path_buf());
+            }
+        }
+        None
+    }
+
+    /// Counts valid .cfg drop-in snippets in the drop-ins directory.
+    pub fn count_default_dropins(dir: &Path) -> usize {
+        if let Ok(entries) = fs::read_dir(dir) {
+            entries
+                .flatten()
+                .filter(|e| {
+                    if let Ok(ft) = e.file_type() {
+                        ft.is_file() && e.file_name().to_string_lossy().ends_with(".cfg")
+                    } else {
+                        false
+                    }
+                })
+                .count()
+        } else {
+            0
+        }
+    }
+
+    /// Derives the backup file path for a given grub.cfg or /etc/default/grub.
     pub fn get_backup_path(cfg_path: &Path) -> PathBuf {
         PathBuf::from(format!("{}.bak", cfg_path.display()))
     }
@@ -95,13 +142,24 @@ impl GrubManager {
         }
     }
 
-    /// Returns the live real-time status of grub.cfg and grub.cfg.bak.
+    /// Returns the live real-time status of both grub.cfg and /etc/default/grub.
     pub fn get_live_status() -> GrubLiveStatus {
         let cfg_path = Self::detect_grub_cfg_path();
         let backup_path = Self::get_backup_path(&cfg_path);
 
+        let default_path = Self::detect_default_grub_path();
+        let default_backup_path = Self::get_backup_path(&default_path);
+
         let (cfg_exists, cfg_size_bytes, cfg_modified_time) = Self::get_file_metadata(&cfg_path);
         let (backup_exists, backup_size_bytes, backup_modified_time) = Self::get_file_metadata(&backup_path);
+
+        let (default_exists, default_size_bytes, default_modified_time) = Self::get_file_metadata(&default_path);
+        let (default_backup_exists, default_backup_size_bytes, default_backup_modified_time) =
+            Self::get_file_metadata(&default_backup_path);
+
+        let dropins_dir = Self::detect_default_grub_d_dir();
+        let default_dropins_count = dropins_dir.as_ref().map(|d| Self::count_default_dropins(d)).unwrap_or(0);
+        let default_dropins_dir = dropins_dir.map(|d| d.to_string_lossy().to_string());
 
         GrubLiveStatus {
             cfg_path: cfg_path.to_string_lossy().to_string(),
@@ -112,6 +170,39 @@ impl GrubManager {
             backup_exists,
             backup_size_bytes,
             backup_modified_time,
+
+            default_path: default_path.to_string_lossy().to_string(),
+            default_exists,
+            default_size_bytes,
+            default_modified_time,
+            default_backup_path: default_backup_path.to_string_lossy().to_string(),
+            default_backup_exists,
+            default_backup_size_bytes,
+            default_backup_modified_time,
+            default_dropins_dir,
+            default_dropins_count,
+        }
+    }
+
+    /// Parses key GRUB parameters from configuration file content.
+    pub fn parse_default_grub_vars(
+        content: &str,
+        timeout: &mut i32,
+        default_entry: &mut String,
+        cmdline: &mut String,
+    ) {
+        for line in content.lines() {
+            let l = line.trim();
+            if let Some(val) = l.strip_prefix("GRUB_TIMEOUT=") {
+                let v = val.trim_matches('"').trim_matches('\'');
+                if let Ok(t) = v.parse::<i32>() {
+                    *timeout = t;
+                }
+            } else if let Some(val) = l.strip_prefix("GRUB_DEFAULT=") {
+                *default_entry = val.trim_matches('"').trim_matches('\'').to_string();
+            } else if let Some(val) = l.strip_prefix("GRUB_CMDLINE_LINUX_DEFAULT=") {
+                *cmdline = val.trim_matches('"').trim_matches('\'').to_string();
+            }
         }
     }
 
@@ -125,17 +216,25 @@ impl GrubManager {
         let mut cmdline = "quiet splash".to_string();
 
         if let Ok(content) = fs::read_to_string(&default_path) {
-            for line in content.lines() {
-                let l = line.trim();
-                if let Some(val) = l.strip_prefix("GRUB_TIMEOUT=") {
-                    let v = val.trim_matches('"').trim_matches('\'');
-                    if let Ok(t) = v.parse::<i32>() {
-                        timeout = t;
+            Self::parse_default_grub_vars(&content, &mut timeout, &mut default_entry, &mut cmdline);
+        }
+
+        // Parse any /etc/default/grub.d/*.cfg drop-in overrides if present
+        if let Some(dropins_path_str) = &live_status.default_dropins_dir {
+            let dropins_dir = Path::new(dropins_path_str);
+            if let Ok(entries) = fs::read_dir(dropins_dir) {
+                let mut dropin_files = Vec::new();
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("cfg") {
+                        dropin_files.push(path);
                     }
-                } else if let Some(val) = l.strip_prefix("GRUB_DEFAULT=") {
-                    default_entry = val.trim_matches('"').trim_matches('\'').to_string();
-                } else if let Some(val) = l.strip_prefix("GRUB_CMDLINE_LINUX_DEFAULT=") {
-                    cmdline = val.trim_matches('"').trim_matches('\'').to_string();
+                }
+                dropin_files.sort();
+                for file in dropin_files {
+                    if let Ok(content) = fs::read_to_string(&file) {
+                        Self::parse_default_grub_vars(&content, &mut timeout, &mut default_entry, &mut cmdline);
+                    }
                 }
             }
         }
@@ -211,15 +310,15 @@ impl GrubManager {
         kernels
     }
 
-    /// Generates a backup of the active grub.cfg (grub.cfg.bak) and /etc/default/grub.
+    /// Generates a backup of the active grub.cfg (grub.cfg.bak) and /etc/default/grub (/etc/default/grub.bak).
     pub fn create_backup() -> Result<String, String> {
         let cfg_path = Self::detect_grub_cfg_path();
         let backup_path = Self::get_backup_path(&cfg_path);
         let default_path = Self::detect_default_grub_path();
-        let default_bak = PathBuf::from(format!("{}.bak", default_path.display()));
+        let default_bak = Self::get_backup_path(&default_path);
 
         let script = format!(
-            "mkdir -p \"$(dirname '{bak}')\" && \
+            "mkdir -p \"$(dirname '{bak}')\" && mkdir -p \"$(dirname '{def_bak}')\" && \
              if [ -f '{cfg}' ]; then cp -p '{cfg}' '{bak}' && chmod 644 '{bak}'; fi && \
              if [ -f '{def}' ]; then cp -p '{def}' '{def_bak}' && chmod 644 '{def_bak}'; fi",
             cfg = cfg_path.display(),
@@ -230,7 +329,17 @@ impl GrubManager {
 
         let (code, stdout, stderr) = HostBridge::run_privileged(&["sh", "-c", &script])?;
         if code == 0 {
-            Ok(format!("Backup successfully generated at {}", backup_path.display()))
+            let mut backed_up = Vec::new();
+            if cfg_path.exists() {
+                backed_up.push(backup_path.display().to_string());
+            }
+            if default_path.exists() {
+                backed_up.push(default_bak.display().to_string());
+            }
+            if backed_up.is_empty() {
+                backed_up.push(backup_path.display().to_string());
+            }
+            Ok(format!("Backup successfully generated: {}", backed_up.join(" and ")))
         } else {
             Err(format!("Backup failed (code {}): {} {}", code, stdout, stderr).trim().to_string())
         }
@@ -241,16 +350,21 @@ impl GrubManager {
         let cfg_path = Self::detect_grub_cfg_path();
         let backup_path = Self::get_backup_path(&cfg_path);
         let default_path = Self::detect_default_grub_path();
-        let default_bak = PathBuf::from(format!("{}.bak", default_path.display()));
+        let default_bak = Self::get_backup_path(&default_path);
 
-        if !backup_path.exists() {
-            return Err(format!("Backup file does not exist: {}", backup_path.display()));
+        if !backup_path.exists() && !default_bak.exists() {
+            return Err(format!(
+                "No backup files found (checked {} and {})",
+                backup_path.display(),
+                default_bak.display()
+            ));
         }
 
         let script = format!(
-            "if [ ! -f '{bak}' ]; then echo 'Backup not found' >&2; exit 1; fi && \
-             cp -p '{bak}' '{cfg}' && \
-             if [ -f '{def_bak}' ]; then cp -p '{def_bak}' '{def}'; fi && \
+            "RESTORED=0 && \
+             if [ -f '{bak}' ]; then cp -p '{bak}' '{cfg}' && RESTORED=1; fi && \
+             if [ -f '{def_bak}' ]; then cp -p '{def_bak}' '{def}' && RESTORED=1; fi && \
+             if [ $RESTORED -eq 0 ]; then echo 'No backup files could be restored' >&2; exit 1; fi && \
              (update-grub || grub2-mkconfig -o '{cfg}' || grub-mkconfig -o '{cfg}' || true)",
             bak = backup_path.display(),
             cfg = cfg_path.display(),
@@ -260,7 +374,14 @@ impl GrubManager {
 
         let (code, stdout, stderr) = HostBridge::run_privileged(&["sh", "-c", &script])?;
         if code == 0 {
-            Ok(format!("Configuration successfully restored from {}", backup_path.display()))
+            let mut restored = Vec::new();
+            if backup_path.exists() {
+                restored.push(backup_path.display().to_string());
+            }
+            if default_bak.exists() {
+                restored.push(default_bak.display().to_string());
+            }
+            Ok(format!("Configuration successfully restored from: {}", restored.join(", ")))
         } else {
             Err(format!("Restore failed (code {}): {} {}", code, stdout, stderr).trim().to_string())
         }

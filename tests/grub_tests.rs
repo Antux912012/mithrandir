@@ -6,6 +6,9 @@ fn test_grub_cfg_and_backup_path_resolution() {
     let cfg_path = GrubManager::detect_grub_cfg_path();
     assert!(!cfg_path.to_string_lossy().is_empty());
 
+    let default_path = GrubManager::detect_default_grub_path();
+    assert!(!default_path.to_string_lossy().is_empty());
+
     let test_path = Path::new("/boot/grub/grub.cfg");
     let bak_path = GrubManager::get_backup_path(test_path);
     assert_eq!(bak_path, Path::new("/boot/grub/grub.cfg.bak"));
@@ -13,6 +16,10 @@ fn test_grub_cfg_and_backup_path_resolution() {
     let test_efi = Path::new("/boot/efi/EFI/fedora/grub.cfg");
     let bak_efi = GrubManager::get_backup_path(test_efi);
     assert_eq!(bak_efi, Path::new("/boot/efi/EFI/fedora/grub.cfg.bak"));
+
+    let test_default = Path::new("/etc/default/grub");
+    let bak_default = GrubManager::get_backup_path(test_default);
+    assert_eq!(bak_default, Path::new("/etc/default/grub.bak"));
 }
 
 #[test]
@@ -22,10 +29,15 @@ fn test_grub_live_status_collection() {
     assert!(!status.backup_path.is_empty());
     assert!(status.backup_path.ends_with(".bak"));
 
+    assert!(!status.default_path.is_empty());
+    assert!(!status.default_backup_path.is_empty());
+    assert!(status.default_backup_path.ends_with(".bak"));
+
     let cfg = GrubManager::read_config();
     assert!(cfg.timeout >= 0);
     assert!(!cfg.default_entry.is_empty());
     assert!(!cfg.live_status.cfg_path.is_empty());
+    assert!(!cfg.live_status.default_path.is_empty());
 }
 
 #[test]

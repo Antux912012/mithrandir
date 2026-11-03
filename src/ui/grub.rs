@@ -39,14 +39,14 @@ impl GrubPage {
         // ---------------------------------------------------------
         let live_group = PreferencesGroup::builder()
             .title("Live GRUB File Telemetry")
-            .description("Real-time monitoring of host bootloader state and configuration")
+            .description("Real-time monitoring of host bootloader state and configuration (/etc/default/grub & grub.cfg)")
             .build();
 
-        let path_row = ActionRow::builder()
-            .title("Monitored Configuration File")
-            .subtitle(format_cfg_subtitle(&cfg.live_status))
+        let default_path_row = ActionRow::builder()
+            .title("Master Configuration (/etc/default/grub)")
+            .subtitle(format_default_subtitle(&cfg.live_status))
             .build();
-        path_row.add_prefix(&Image::from_icon_name("application-x-firmware-symbolic"));
+        default_path_row.add_prefix(&Image::from_icon_name("document-properties-symbolic"));
 
         let refresh_btn = Button::builder()
             .icon_name("view-refresh-symbolic")
@@ -54,32 +54,49 @@ impl GrubPage {
             .valign(Align::Center)
             .css_classes(vec!["flat"])
             .build();
-        path_row.add_suffix(&refresh_btn);
-        live_group.add(&path_row);
+        default_path_row.add_suffix(&refresh_btn);
+        live_group.add(&default_path_row);
 
-        let mtime_row = ActionRow::builder()
-            .title("Last Generated / Modified")
-            .subtitle(&cfg.live_status.cfg_modified_time)
+        let cfg_path_row = ActionRow::builder()
+            .title("Bootloader Runtime Output (grub.cfg)")
+            .subtitle(format_cfg_subtitle(&cfg.live_status))
             .build();
-        mtime_row.add_prefix(&Image::from_icon_name("preferences-system-time-symbolic"));
-        live_group.add(&mtime_row);
+        cfg_path_row.add_prefix(&Image::from_icon_name("application-x-firmware-symbolic"));
+        live_group.add(&cfg_path_row);
 
         root_box.append(&live_group);
 
         // ---------------------------------------------------------
-        // 2. Backup & Disaster Recovery Group (grub.cfg.bak)
+        // 2. Backup & Disaster Recovery Group
         // ---------------------------------------------------------
         let backup_group = PreferencesGroup::builder()
-            .title("Configuration Backup & Disaster Recovery (grub.cfg.bak)")
-            .description("Create, monitor, and restore original boot configuration")
+            .title("Configuration Backup & Disaster Recovery")
+            .description("Create, monitor, and restore original boot configurations")
             .build();
 
-        let backup_status_row = ActionRow::builder()
-            .title("Backup Snapshot File")
-            .subtitle(format_backup_subtitle(&cfg.live_status))
+        let default_backup_row = ActionRow::builder()
+            .title("Master Config Backup (/etc/default/grub.bak)")
+            .subtitle(format_file_backup_subtitle(
+                &cfg.live_status.default_backup_path,
+                cfg.live_status.default_backup_exists,
+                cfg.live_status.default_backup_size_bytes,
+                &cfg.live_status.default_backup_modified_time,
+            ))
             .build();
-        backup_status_row.add_prefix(&Image::from_icon_name("document-save-symbolic"));
-        backup_group.add(&backup_status_row);
+        default_backup_row.add_prefix(&Image::from_icon_name("document-save-symbolic"));
+        backup_group.add(&default_backup_row);
+
+        let cfg_backup_row = ActionRow::builder()
+            .title("Bootloader Config Backup (grub.cfg.bak)")
+            .subtitle(format_file_backup_subtitle(
+                &cfg.live_status.backup_path,
+                cfg.live_status.backup_exists,
+                cfg.live_status.backup_size_bytes,
+                &cfg.live_status.backup_modified_time,
+            ))
+            .build();
+        cfg_backup_row.add_prefix(&Image::from_icon_name("document-save-symbolic"));
+        backup_group.add(&cfg_backup_row);
 
         let backup_actions_box = GtkBox::builder()
             .orientation(Orientation::Horizontal)
@@ -90,7 +107,7 @@ impl GrubPage {
             .build();
 
         let create_bak_btn = Button::builder()
-            .label("Create Backup (grub.cfg.bak)")
+            .label("Create Backups (.bak)")
             .icon_name("document-save-symbolic")
             .css_classes(vec!["suggested-action"])
             .valign(Align::Center)
@@ -100,7 +117,7 @@ impl GrubPage {
             .label("Restore Configuration")
             .icon_name("edit-undo-symbolic")
             .css_classes(vec!["destructive-action"])
-            .sensitive(cfg.live_status.backup_exists)
+            .sensitive(cfg.live_status.backup_exists || cfg.live_status.default_backup_exists)
             .valign(Align::Center)
             .build();
 
@@ -187,25 +204,38 @@ impl GrubPage {
         // ---------------------------------------------------------
         // 5. Real-Time File Monitoring Controller
         // ---------------------------------------------------------
-        let path_row_clone = path_row.clone();
-        let mtime_row_clone = mtime_row.clone();
-        let backup_row_clone = backup_status_row.clone();
+        let default_row_clone = default_path_row.clone();
+        let cfg_row_clone = cfg_path_row.clone();
+        let default_bak_row_clone = default_backup_row.clone();
+        let cfg_bak_row_clone = cfg_backup_row.clone();
         let restore_btn_clone = restore_bak_btn.clone();
         let last_status = Rc::new(RefCell::new(cfg.live_status.clone()));
 
         let update_live_status = {
             let last_status = last_status.clone();
-            let path_row = path_row_clone.clone();
-            let mtime_row = mtime_row_clone.clone();
-            let backup_row = backup_row_clone.clone();
+            let default_row = default_row_clone.clone();
+            let cfg_row = cfg_row_clone.clone();
+            let default_bak_row = default_bak_row_clone.clone();
+            let cfg_bak_row = cfg_bak_row_clone.clone();
             let restore_btn = restore_btn_clone.clone();
             Rc::new(move || {
                 let cur = GrubManager::get_live_status();
                 if cur != *last_status.borrow() {
-                    path_row.set_subtitle(&format_cfg_subtitle(&cur));
-                    mtime_row.set_subtitle(&cur.cfg_modified_time);
-                    backup_row.set_subtitle(&format_backup_subtitle(&cur));
-                    restore_btn.set_sensitive(cur.backup_exists);
+                    default_row.set_subtitle(&format_default_subtitle(&cur));
+                    cfg_row.set_subtitle(&format_cfg_subtitle(&cur));
+                    default_bak_row.set_subtitle(&format_file_backup_subtitle(
+                        &cur.default_backup_path,
+                        cur.default_backup_exists,
+                        cur.default_backup_size_bytes,
+                        &cur.default_backup_modified_time,
+                    ));
+                    cfg_bak_row.set_subtitle(&format_file_backup_subtitle(
+                        &cur.backup_path,
+                        cur.backup_exists,
+                        cur.backup_size_bytes,
+                        &cur.backup_modified_time,
+                    ));
+                    restore_btn.set_sensitive(cur.backup_exists || cur.default_backup_exists);
                     *last_status.borrow_mut() = cur;
                 }
             })
@@ -235,7 +265,7 @@ impl GrubPage {
         glib::MainContext::default().spawn_local(async move {
             while let Ok(res) = rx_bak.recv().await {
                 btn_bak_ref.set_sensitive(true);
-                btn_bak_ref.set_label("Create Backup (grub.cfg.bak)");
+                btn_bak_ref.set_label("Create Backups (.bak)");
                 update_live_bak();
 
                 match res {
@@ -394,20 +424,52 @@ impl GrubPage {
     }
 }
 
+fn format_default_subtitle(status: &GrubLiveStatus) -> String {
+    if status.default_exists {
+        let size_str = if status.default_size_bytes < 1024 {
+            format!("{} B", status.default_size_bytes)
+        } else {
+            format!("{:.1} KB", (status.default_size_bytes as f64) / 1024.0)
+        };
+        let dropins_info = if status.default_dropins_count > 0 {
+            format!(
+                " (+{} drop-in file{} in /etc/default/grub.d)",
+                status.default_dropins_count,
+                if status.default_dropins_count == 1 { "" } else { "s" }
+            )
+        } else {
+            String::new()
+        };
+        format!(
+            "🟢 {} ({}) • Modified: {}{}",
+            status.default_path, size_str, status.default_modified_time, dropins_info
+        )
+    } else {
+        format!("⚠️ {} (Not detected on filesystem)", status.default_path)
+    }
+}
+
 fn format_cfg_subtitle(status: &GrubLiveStatus) -> String {
     if status.cfg_exists {
         let kb = (status.cfg_size_bytes as f64) / 1024.0;
-        format!("🟢 {} ({:.1} KB) — Live Monitored", status.cfg_path, kb)
+        format!(
+            "🟢 {} ({:.1} KB) • Modified: {}",
+            status.cfg_path, kb, status.cfg_modified_time
+        )
     } else {
         format!("⚠️ {} (Not detected on filesystem)", status.cfg_path)
     }
 }
 
-fn format_backup_subtitle(status: &GrubLiveStatus) -> String {
-    if status.backup_exists {
-        let kb = (status.backup_size_bytes as f64) / 1024.0;
-        format!("✅ {} ({:.1} KB) • Modified: {}", status.backup_path, kb, status.backup_modified_time)
+fn format_file_backup_subtitle(path: &str, exists: bool, size_bytes: u64, modified_time: &str) -> String {
+    if exists {
+        let size_str = if size_bytes < 1024 {
+            format!("{} B", size_bytes)
+        } else {
+            format!("{:.1} KB", (size_bytes as f64) / 1024.0)
+        };
+        format!("✅ {} ({}) • Modified: {}", path, size_str, modified_time)
     } else {
-        format!("No backup file created yet ({})", status.backup_path)
+        format!("No backup file created yet ({})", path)
     }
 }
