@@ -181,3 +181,56 @@ fn test_detect_kernel_live_fallback() {
     // On systems without SCX loaded, active scheduler should be "none" or name
     assert!(!kinfo.scx_active_scheduler.is_empty());
 }
+
+#[test]
+fn test_scx_normalize_and_descriptions() {
+    assert_eq!(scx::normalize_scheduler_name("bpfland"), "scx_bpfland");
+    assert_eq!(scx::normalize_scheduler_name("bpfland_1.0.8_g123456"), "scx_bpfland");
+    assert_eq!(scx::normalize_scheduler_name("scx_lavd"), "scx_lavd");
+    assert_eq!(scx::normalize_scheduler_name("rustland"), "scx_rustland");
+    assert_eq!(scx::normalize_scheduler_name("simple"), "scx_simple");
+    assert_eq!(scx::normalize_scheduler_name("none"), "none");
+    assert_eq!(scx::normalize_scheduler_name("unknown"), "none");
+    assert_eq!(scx::normalize_scheduler_name(""), "none");
+
+    for &sched in scx::KNOWN_SCX_SCHEDULERS {
+        let desc = scx::scheduler_description(sched);
+        assert!(!desc.is_empty());
+        assert_ne!(desc, "Pluggable sched-ext (SCX) BPF kernel scheduler");
+    }
+
+    assert_eq!(scx::ScxMode::Gaming.label(), "Gaming");
+    assert_eq!(scx::ScxMode::PowerSave.cli_name(), "powersave");
+    assert_eq!(
+        scx::ScxMode::Gaming.flags_for_scheduler("scx_bpfland"),
+        &["-m", "performance"]
+    );
+    assert_eq!(
+        scx::ScxMode::PowerSave.flags_for_scheduler("scx_lavd"),
+        &["--powersave"]
+    );
+}
+
+#[test]
+fn test_scx_distro_install_plans() {
+    use mithrandir::os_info::LinuxDistro;
+
+    let ubuntu_no_scx = scx::get_install_plan_for_distro(LinuxDistro::Ubuntu, "Ubuntu 24.04 LTS", false);
+    assert!(ubuntu_no_scx.command.contains("ppa:arighi/sched-ext"));
+    assert!(ubuntu_no_scx.command.contains("linux-generic-wip"));
+    assert!(ubuntu_no_scx.requires_reboot_for_kernel);
+
+    let ubuntu_with_scx = scx::get_install_plan_for_distro(LinuxDistro::Ubuntu, "Ubuntu 24.10", true);
+    assert!(ubuntu_with_scx.command.contains("ppa:arighi/sched-ext"));
+    assert!(!ubuntu_with_scx.requires_reboot_for_kernel);
+
+    let fedora_plan = scx::get_install_plan_for_distro(LinuxDistro::Fedora, "Fedora Linux 41", true);
+    assert!(fedora_plan.command.contains("scx-scheds"));
+
+    let arch_plan = scx::get_install_plan_for_distro(LinuxDistro::Arch, "Arch Linux", true);
+    assert!(arch_plan.command.contains("pacman"));
+    assert!(arch_plan.command.contains("scx-scheds"));
+
+    let suse_plan = scx::get_install_plan_for_distro(LinuxDistro::OpenSuse, "openSUSE Tumbleweed", true);
+    assert!(suse_plan.command.contains("zypper"));
+}

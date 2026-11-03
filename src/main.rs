@@ -61,19 +61,39 @@ fn main() {
         }
     }
 
+    if args.iter().any(|a| a == "--install-scx") {
+        match mithrandir::kernel::scx::install_scx_streaming(|line| println!("  {}", line)) {
+            Ok(plan) => {
+                println!("✅ sched-ext (SCX) installed successfully for {}!", plan.distro_name);
+                if plan.requires_reboot_for_kernel && !mithrandir::kernel::scx::is_scx_supported() {
+                    println!("ℹ️ Reboot into the newly installed sched-ext kernel to activate BPF schedulers.");
+                }
+                return;
+            }
+            Err(e) => {
+                eprintln!("❌ Failed to install sched-ext: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
     if args.iter().any(|a| a == "--kernel" || a == "--sched") {
         let kinfo = mithrandir::detect_kernel();
+        let scx_state = mithrandir::kernel::scx::get_sysfs_scheduler_state().unwrap_or_else(|| "unavailable".to_string());
+        let mode_label = mithrandir::kernel::scx::ScxMode::from_u32(kinfo.scx_mode).label();
         println!("🧠 Kernel Release:      {}", kinfo.kernel_release);
         println!("🐧 CachyOS Kernel:      {}", if kinfo.is_cachyos { "Yes" } else { "No" });
         println!("⚡ BORE Supported:      {}", if kinfo.bore_supported { "Yes" } else { "No" });
         if kinfo.bore_supported {
             println!("   BORE Active:         {}", if kinfo.bore_enabled { "Enabled (1)" } else { "Disabled / EEVDF (0)" });
         }
-        println!("🔄 sched-ext (SCX):     {}", if kinfo.scx_supported { "Yes" } else { "No" });
-        if kinfo.scx_supported {
-            println!("   Active Scheduler:    {}", kinfo.scx_active_scheduler);
-            println!("   Scheduler Mode:      {}", kinfo.scx_mode);
-            println!("   Available SCX:       {:?}", kinfo.supported_scx_schedulers);
+        println!("🔄 sched-ext (SCX):     {} (sysfs state: {})", if kinfo.scx_supported { "Yes" } else { "No" }, scx_state);
+        println!("   Active Scheduler:    {} — {}", kinfo.scx_active_scheduler, mithrandir::kernel::scx::scheduler_description(&kinfo.scx_active_scheduler));
+        println!("   Scheduler Mode:      {} ({})", mode_label, kinfo.scx_mode);
+        println!("   Installed SCX:       {:?}", kinfo.supported_scx_schedulers);
+        if kinfo.supported_scx_schedulers.is_empty() {
+            let plan = mithrandir::kernel::scx::get_install_plan();
+            println!("   Install Plan:        {} (run `mithrandir --install-scx`)", plan.summary);
         }
         println!("🔋 Active Power Preset:  {}", mithrandir::get_active_preset().name());
         return;
