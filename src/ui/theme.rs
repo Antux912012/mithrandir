@@ -79,6 +79,7 @@ pub static GNOME_ACCENTS: &[GnomeAccent] = &[
 
 thread_local! {
     static CSS_PROVIDER: CssProvider = CssProvider::new();
+    static DARK_SIGNAL_CONNECTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 pub struct ThemeManager;
@@ -185,13 +186,6 @@ impl ThemeManager {
                     background-color: {hex};
                     border-radius: 4px;
                 }}
-
-                .metric-card {{
-                    background: rgba(255, 255, 255, 0.04);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    border-radius: 12px;
-                    padding: 14px;
-                }}
                 "#,
                 name = accent.name,
                 hex = accent.hex,
@@ -286,13 +280,6 @@ impl ThemeManager {
                     background-color: {hex};
                     border-radius: 4px;
                 }}
-
-                .metric-card {{
-                    background: rgba(0, 0, 0, 0.02);
-                    border: 1px solid rgba(0, 0, 0, 0.08);
-                    border-radius: 12px;
-                    padding: 14px;
-                }}
                 "#,
                 name = accent.name,
                 hex = accent.hex,
@@ -321,12 +308,17 @@ impl ThemeManager {
                     gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
                 );
 
-                let provider_clone = provider.clone();
-                let accent_id_owned = accent_id.to_string();
-                style_manager.connect_dark_notify(move |sm| {
-                    let dark = sm.is_dark();
-                    let acc = Self::get_accent_by_id(&accent_id_owned);
-                    provider_clone.load_from_string(&Self::generate_css(&acc, dark));
+                DARK_SIGNAL_CONNECTED.with(|connected| {
+                    if !connected.get() {
+                        connected.set(true);
+                        let provider_clone = provider.clone();
+                        style_manager.connect_dark_notify(move |sm| {
+                            let dark = sm.is_dark();
+                            let cur_cfg = crate::backend::AppSettings::get();
+                            let acc = Self::get_accent_by_id(&cur_cfg.accent_color);
+                            provider_clone.load_from_string(&Self::generate_css(&acc, dark));
+                        });
+                    }
                 });
             });
         }

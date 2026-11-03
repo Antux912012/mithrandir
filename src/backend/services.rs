@@ -17,16 +17,20 @@ impl ServiceManager {
     pub fn list_services() -> Vec<ServiceInfo> {
         let output = HostBridge::run_command(
             "systemctl",
-            &["list-units", "--type=service", "--all", "--no-legend", "--no-pager"],
+            &["list-units", "--type=service", "--all", "--plain", "--no-legend", "--no-pager"],
         );
 
         let mut services = Vec::new();
         if let Ok((code, stdout, _)) = output {
             if code == 0 {
                 for line in stdout.lines() {
-                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    let cleaned = line.trim_start().trim_start_matches('●').trim_start();
+                    let parts: Vec<&str> = cleaned.split_whitespace().collect();
                     if parts.len() >= 5 {
-                        let unit = parts[0].trim_start_matches('●').trim().to_string();
+                        let unit = parts[0].to_string();
+                        if unit.is_empty() {
+                            continue;
+                        }
                         let load = parts[1].to_string();
                         let active = parts[2].to_string();
                         let sub = parts[3].to_string();

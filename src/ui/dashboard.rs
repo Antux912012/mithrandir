@@ -10,8 +10,6 @@ use adw::{
     ActionRow, Clamp, PreferencesGroup, PreferencesPage, PreferencesWindow, SpinRow, SwitchRow,
     Toast, ToastOverlay,
 };
-use std::cell::Cell;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -20,6 +18,7 @@ use crate::backend::monitor::{
     BatteryInfo, CpuInfo, DiskPartition, GpuInfo, MemoryInfo, NetworkRate, SystemMonitor,
     SystemSummary,
 };
+use crate::backend::settings::AppSettings;
 use crate::backend::smart_boost::{BoostStatus, SmartBoostEngine};
 
 struct TelemetrySnapshot {
@@ -130,6 +129,7 @@ impl DashboardPage {
         let row = ActionRow::builder()
             .title(title)
             .subtitle(subtitle)
+            .use_markup(false)
             .build();
         row.add_prefix(&Image::from_icon_name(icon_name));
         row
@@ -250,88 +250,74 @@ impl DashboardPage {
         card.append(&stats_row);
         root_box.append(&card);
 
-        // Personalise Smart Boost Dialog state & handler
-        {
-            let auto_enabled = Rc::new(Cell::new(true));
-            let ram_thresh = Rc::new(Cell::new(80.0f64));
-            let temp_thresh = Rc::new(Cell::new(1024.0f64));
-            let notify_enabled = Rc::new(Cell::new(true));
+        // Personalise Smart Boost Dialog state & handler (backed by AppSettings)
+        pers_btn.connect_clicked(move |btn| {
+            let cur_settings = AppSettings::get();
+            let dialog = PreferencesWindow::builder()
+                .title("Personalise Smart Boost")
+                .modal(true)
+                .default_width(500)
+                .default_height(420)
+                .build();
 
-            pers_btn.connect_clicked(move |btn| {
-                let dialog = PreferencesWindow::builder()
-                    .title("Personalise Smart Boost")
-                    .modal(true)
-                    .default_width(500)
-                    .default_height(420)
-                    .build();
+            if let Some(root) = btn.root().and_then(|r| r.downcast::<Window>().ok()) {
+                dialog.set_transient_for(Some(&root));
+            }
 
-                if let Some(root) = btn.root().and_then(|r| r.downcast::<Window>().ok()) {
-                    dialog.set_transient_for(Some(&root));
-                }
+            let page = PreferencesPage::new();
+            let group = PreferencesGroup::builder()
+                .title("Automatic Smart Boost Conditions")
+                .description("Mithrandir will automatically boost performance when thresholds are met")
+                .build();
 
-                let page = PreferencesPage::new();
-                let group = PreferencesGroup::builder()
-                    .title("Automatic Smart Boost Conditions")
-                    .description("Mithrandir will automatically boost performance when thresholds are met")
-                    .build();
-
-                let auto_row = SwitchRow::builder()
-                    .title("Enable Automatic Smart Boost")
-                    .subtitle("Continuously monitors RAM and cache clutter in the background")
-                    .active(auto_enabled.get())
-                    .build();
-                {
-                    let auto_enabled = auto_enabled.clone();
-                    auto_row.connect_active_notify(move |w| {
-                        auto_enabled.set(w.is_active());
-                    });
-                }
-                group.add(&auto_row);
-
-                let ram_row = SpinRow::builder()
-                    .title("Auto-Boost RAM Threshold (%)")
-                    .subtitle("Trigger boost when system memory usage exceeds this percentage")
-                    .adjustment(&Adjustment::new(ram_thresh.get(), 50.0, 95.0, 5.0, 5.0, 0.0))
-                    .build();
-                {
-                    let ram_thresh = ram_thresh.clone();
-                    ram_row.connect_value_notify(move |w| {
-                        ram_thresh.set(w.value());
-                    });
-                }
-                group.add(&ram_row);
-
-                let temp_row = SpinRow::builder()
-                    .title("Auto-Boost Temp Clutter Threshold (MB)")
-                    .subtitle("Trigger boost when cleanable temporary files exceed this size")
-                    .adjustment(&Adjustment::new(temp_thresh.get(), 250.0, 5000.0, 250.0, 250.0, 0.0))
-                    .build();
-                {
-                    let temp_thresh = temp_thresh.clone();
-                    temp_row.connect_value_notify(move |w| {
-                        temp_thresh.set(w.value());
-                    });
-                }
-                group.add(&temp_row);
-
-                let notify_row = SwitchRow::builder()
-                    .title("Show Notification on Boost")
-                    .subtitle("Display desktop toast when Smart Boost reclaims memory and files")
-                    .active(notify_enabled.get())
-                    .build();
-                {
-                    let notify_enabled = notify_enabled.clone();
-                    notify_row.connect_active_notify(move |w| {
-                        notify_enabled.set(w.is_active());
-                    });
-                }
-                group.add(&notify_row);
-
-                page.add(&group);
-                dialog.add(&page);
-                dialog.present();
+            let auto_row = SwitchRow::builder()
+                .title("Enable Automatic Smart Boost")
+                .subtitle("Continuously monitors RAM and cache clutter in the background")
+                .active(cur_settings.auto_boost_enabled)
+                .build();
+            auto_row.connect_active_notify(|w| {
+                let active = w.is_active();
+                AppSettings::update(|cfg| cfg.auto_boost_enabled = active);
             });
-        }
+            group.add(&auto_row);
+
+            let ram_row = SpinRow::builder()
+                .title("Auto-Boost RAM Threshold (%)")
+                .subtitle("Trigger boost when system memory usage exceeds this percentage")
+                .adjustment(&Adjustment::new(cur_settings.ram_threshold, 50.0, 95.0, 5.0, 5.0, 0.0))
+                .build();
+            ram_row.connect_value_notify(|w| {
+                let val = w.value();
+                AppSettings::update(|cfg| cfg.ram_threshold = val);
+            });
+            group.add(&ram_row);
+
+            let temp_row = SpinRow::builder()
+                .title("Auto-Boost Temp Clutter Threshold (MB)")
+                .subtitle("Trigger boost when cleanable temporary files exceed this size")
+                .adjustment(&Adjustment::new(cur_settings.temp_threshold_mb, 250.0, 5000.0, 250.0, 250.0, 0.0))
+                .build();
+            temp_row.connect_value_notify(|w| {
+                let val = w.value();
+                AppSettings::update(|cfg| cfg.temp_threshold_mb = val);
+            });
+            group.add(&temp_row);
+
+            let notify_row = SwitchRow::builder()
+                .title("Show Notification on Boost")
+                .subtitle("Display desktop toast when Smart Boost reclaims memory and files")
+                .active(cur_settings.desktop_notifications)
+                .build();
+            notify_row.connect_active_notify(|w| {
+                let active = w.is_active();
+                AppSettings::update(|cfg| cfg.desktop_notifications = active);
+            });
+            group.add(&notify_row);
+
+            page.add(&group);
+            dialog.add(&page);
+            dialog.present();
+        });
 
         // 2. Real-Time System Sensors (9 Square MetricTile Cards)
         let tile_group = PreferencesGroup::builder()
@@ -419,8 +405,9 @@ impl DashboardPage {
         };
 
         let kernel_row = ActionRow::builder()
-            .title("Kernel &amp; CPU Scheduler")
+            .title("Kernel & CPU Scheduler")
             .subtitle(format!("Release: {} | {}", kinfo.kernel_release, sched_name))
+            .use_markup(false)
             .build();
         kernel_row.add_prefix(&Image::from_icon_name("cpu-symbolic"));
         power_group.add(&kernel_row);
@@ -490,9 +477,9 @@ impl DashboardPage {
         );
         col2_list.append(&uptime_row);
         col2_list.append(&Self::create_info_row(
-            "Session",
-            &initial_summary.desktop,
-            "dialog-information-symbolic",
+            "Hostname",
+            &initial_summary.hostname,
+            "network-server-symbolic",
         ));
         two_col_box.append(&col2_list);
 

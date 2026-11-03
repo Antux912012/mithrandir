@@ -104,11 +104,14 @@ impl SmartBoostEngine {
             CleanerEngine::clean_user_tmp();
         }
 
-        // 2. Drop inactive pagecache & slab caches
+        // 2. Drop inactive pagecache & slab caches in a single privileged invocation
         if drop_caches {
             let _ = HostBridge::run_command("sync", &[]);
-            let _ = HostBridge::run_privileged(&["sh", "-c", "echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true"]);
-            let _ = HostBridge::run_privileged(&["sh", "-c", "echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true"]);
+            let _ = HostBridge::run_privileged(&[
+                "sh",
+                "-c",
+                "echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true; echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true",
+            ]);
         }
 
         std::thread::sleep(Duration::from_millis(300));

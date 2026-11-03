@@ -36,9 +36,9 @@ impl UninstallerPage {
             .build();
 
         let btn_native = ToggleButton::builder().label("Native System").active(true).css_classes(vec!["pill"]).build();
-        let btn_flatpak = ToggleButton::builder().label("Flatpak").css_classes(vec!["pill"]).build();
-        let btn_snap = ToggleButton::builder().label("Snap").css_classes(vec!["pill"]).build();
-        let btn_python = ToggleButton::builder().label("Python (pip)").css_classes(vec!["pill"]).build();
+        let btn_flatpak = ToggleButton::builder().label("Flatpak").group(&btn_native).css_classes(vec!["pill"]).build();
+        let btn_snap = ToggleButton::builder().label("Snap").group(&btn_native).css_classes(vec!["pill"]).build();
+        let btn_python = ToggleButton::builder().label("Python (pip)").group(&btn_native).css_classes(vec!["pill"]).build();
 
         filter_bar.append(&btn_native);
         filter_bar.append(&btn_flatpak);
@@ -105,6 +105,7 @@ impl UninstallerPage {
                     let row = ActionRow::builder()
                         .title(&p.name)
                         .subtitle(format!("v{} | {} | {}", p.version, p.size_str, p.description))
+                        .use_markup(false)
                         .build();
 
                     let uninst_btn = Button::builder()
@@ -116,6 +117,7 @@ impl UninstallerPage {
                     let pkg_item = p.clone();
                     let row_inner = row.clone();
                     let list_inner = list_box.clone();
+                    let cache_inner = packages_cache.clone();
 
                     uninst_btn.connect_clicked(move |b| {
                         b.set_sensitive(false);
@@ -123,11 +125,26 @@ impl UninstallerPage {
                         let p_clone = pkg_item.clone();
                         let r_inner = row_inner.clone();
                         let l_inner = list_inner.clone();
+                        let c_inner = cache_inner.clone();
+                        let b_inner = b.clone();
 
+                        let (tx, rx) = async_channel::unbounded();
                         std::thread::spawn(move || {
-                            let _ = PackageManager::uninstall_package(&p_clone);
+                            let res = PackageManager::uninstall_package(&p_clone);
+                            let _ = tx.send_blocking((res, p_clone.name));
                         });
-                        l_inner.remove(&r_inner);
+
+                        glib::MainContext::default().spawn_local(async move {
+                            if let Ok((res, removed_name)) = rx.recv().await {
+                                if res.is_ok() {
+                                    c_inner.borrow_mut().retain(|item| item.name != removed_name);
+                                    l_inner.remove(&r_inner);
+                                } else {
+                                    b_inner.set_sensitive(true);
+                                    b_inner.set_label("Uninstall");
+                                }
+                            }
+                        });
                     });
 
                     row.add_suffix(&uninst_btn);
@@ -163,58 +180,20 @@ impl UninstallerPage {
             }
         };
 
-        // Connect pills
-        let lt1 = load_type.clone();
-        let b_flat = btn_flatpak.clone();
-        let b_snap = btn_snap.clone();
-        let b_py = btn_python.clone();
-        btn_native.connect_toggled(move |b| {
-            if b.is_active() {
-                b_flat.set_active(false);
-                b_snap.set_active(false);
-                b_py.set_active(false);
-                lt1("native");
-            }
-        });
-
-        let lt2 = load_type.clone();
-        let b_nat = btn_native.clone();
-        let b_snap2 = btn_snap.clone();
-        let b_py2 = btn_python.clone();
-        btn_flatpak.connect_toggled(move |b| {
-            if b.is_active() {
-                b_nat.set_active(false);
-                b_snap2.set_active(false);
-                b_py2.set_active(false);
-                lt2("flatpak");
-            }
-        });
-
-        let lt3 = load_type.clone();
-        let b_nat3 = btn_native.clone();
-        let b_flat3 = btn_flatpak.clone();
-        let b_py3 = btn_python.clone();
-        btn_snap.connect_toggled(move |b| {
-            if b.is_active() {
-                b_nat3.set_active(false);
-                b_flat3.set_active(false);
-                b_py3.set_active(false);
-                lt3("snap");
-            }
-        });
-
-        let lt4 = load_type.clone();
-        let b_nat4 = btn_native.clone();
-        let b_flat4 = btn_flatpak.clone();
-        let b_snap4 = btn_snap.clone();
-        btn_python.connect_toggled(move |b| {
-            if b.is_active() {
-                b_nat4.set_active(false);
-                b_flat4.set_active(false);
-                b_snap4.set_active(false);
-                lt4("python");
-            }
-        });
+        // Connect mutually exclusive radio pills
+        for (btn, pkg_type) in [
+            (&btn_native, "native"),
+            (&btn_flatpak, "flatpak"),
+            (&btn_snap, "snap"),
+            (&btn_python, "python"),
+        ] {
+            let lt = load_type.clone();
+            btn.connect_toggled(move |b| {
+                if b.is_active() {
+                    lt(pkg_type);
+                }
+            });
+        }
 
         let search_clone = search_filter.clone();
         let pop_clone = populate.clone();

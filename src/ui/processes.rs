@@ -142,6 +142,7 @@ impl ProcessesPage {
                     let row = ActionRow::builder()
                         .title(format!("{} (PID: {})", p.name, p.pid))
                         .subtitle(format!("CPU: {:.1}% | RAM: {:.1} MB ({:.1}%)", p.cpu_percent, p.mem_mb, p.mem_percent))
+                        .use_markup(false)
                         .build();
 
                     let kill_btn = Button::builder()
@@ -153,10 +154,12 @@ impl ProcessesPage {
                     let pid = p.pid;
                     let list_box_inner = list_box.clone();
                     let row_inner = row.clone();
+                    let all_procs_kill = all_procs.clone();
 
                     kill_btn.connect_clicked(move |b| {
                         b.set_sensitive(false);
                         let _ = ProcessManager::kill_process(pid, false);
+                        all_procs_kill.borrow_mut().retain(|item| item.pid != pid);
                         list_box_inner.remove(&row_inner);
                     });
 

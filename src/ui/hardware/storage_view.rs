@@ -20,8 +20,12 @@ pub fn build_storage_view(
 
     for disk in disks {
         let disk_grp = adw::PreferencesGroup::builder()
-            .title(&format!("Drive: {}", disk.model))
-            .description(&format!("Physical Device {} ({:.0} GB)", disk.name, disk.capacity_gb))
+            .title(&format!("Drive: {}", gtk4::glib::markup_escape_text(&disk.model)))
+            .description(&format!(
+                "Physical Device {} ({:.0} GB)",
+                gtk4::glib::markup_escape_text(&disk.name),
+                disk.capacity_gb
+            ))
             .build();
 
         let model_row = make_copy_row(
@@ -36,6 +40,7 @@ pub fn build_storage_view(
         let cap_row = adw::ActionRow::builder()
             .title("Capacity")
             .subtitle(&format!("{:.1} GB", disk.capacity_gb))
+            .use_markup(false)
             .build();
         cap_row.add_prefix(&gtk4::Image::from_icon_name("folder-symbolic"));
         disk_grp.add(&cap_row);
@@ -61,6 +66,7 @@ pub fn build_storage_view(
         let rec_row = adw::ActionRow::builder()
             .title("Upgrade Compatibility")
             .subtitle(&disk.upgrade_recommendation)
+            .use_markup(false)
             .build();
         rec_row.add_prefix(&gtk4::Image::from_icon_name("emblem-ok-symbolic"));
         disk_grp.add(&rec_row);

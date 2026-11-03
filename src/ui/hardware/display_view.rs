@@ -20,7 +20,7 @@ pub fn build_display_view(
 
     for disp in displays {
         let disp_grp = adw::PreferencesGroup::builder()
-            .title(&format!("Display: {}", disp.connector))
+            .title(&format!("Display: {}", gtk4::glib::markup_escape_text(&disp.connector)))
             .description("Internal LCD panel and video output specifications")
             .build();
 
@@ -36,6 +36,7 @@ pub fn build_display_view(
         let mfg_row = adw::ActionRow::builder()
             .title("Panel Manufacturer")
             .subtitle(&disp.manufacturer)
+            .use_markup(false)
             .build();
         mfg_row.add_prefix(&gtk4::Image::from_icon_name("org.gnome.Settings-symbolic"));
         disp_grp.add(&mfg_row);
@@ -53,6 +54,7 @@ pub fn build_display_view(
         let specs_row = adw::ActionRow::builder()
             .title("Interface Connector & State")
             .subtitle(&specs_sub)
+            .use_markup(false)
             .build();
         specs_row.add_prefix(&gtk4::Image::from_icon_name("dialog-information-symbolic"));
         disp_grp.add(&specs_row);

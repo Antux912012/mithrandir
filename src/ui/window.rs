@@ -338,11 +338,17 @@ impl MithrandirWindow {
             }
         });
 
-        // Handle window close request: hide to background
-        window.set_hide_on_close(true);
+        // Handle window close request: respect keep_in_background preference
         window.connect_close_request(move |w| {
-            w.set_visible(false);
-            gtk4::glib::Propagation::Stop
+            if AppSettings::get().keep_in_background {
+                w.set_visible(false);
+                gtk4::glib::Propagation::Stop
+            } else {
+                if let Some(app) = w.application() {
+                    app.quit();
+                }
+                gtk4::glib::Propagation::Proceed
+            }
         });
 
         window

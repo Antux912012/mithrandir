@@ -150,7 +150,7 @@ fn main() {
                 if cfg.auto_boost_enabled {
                     BackgroundDaemon::run_auto_boost_check(
                         cfg.ram_threshold,
-                        1024.0,
+                        cfg.temp_threshold_mb,
                         cfg.cooldown_minutes,
                         cfg.desktop_notifications,
                     );

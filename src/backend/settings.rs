@@ -9,6 +9,8 @@ pub struct AppSettings {
     pub show_tray_icon: bool,
     pub auto_boost_enabled: bool,
     pub ram_threshold: f64,
+    #[serde(default = "default_temp_threshold_mb")]
+    pub temp_threshold_mb: f64,
     pub cooldown_minutes: u64,
     pub desktop_notifications: bool,
     #[serde(default = "default_true")]
@@ -30,6 +32,7 @@ pub struct AppSettings {
 }
 
 fn default_true() -> bool { true }
+fn default_temp_threshold_mb() -> f64 { 1024.0 }
 fn default_auto() -> String { "auto".to_string() }
 fn default_accent() -> String { "blue".to_string() }
 fn default_ai_provider() -> String { "openai".to_string() }
@@ -43,6 +46,7 @@ impl Default for AppSettings {
             show_tray_icon: true,
             auto_boost_enabled: true,
             ram_threshold: 80.0,
+            temp_threshold_mb: 1024.0,
             cooldown_minutes: 15,
             desktop_notifications: true,
             hardware_acceleration: true,

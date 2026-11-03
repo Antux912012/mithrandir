@@ -94,20 +94,14 @@ impl MithrandirTray {
         }]
     }
 
-    /// Concurrency-safe Smartboost runner for tray actions.
+    /// Concurrency-safe Smartboost runner for tray actions (delegates re-entrancy guard to SmartBoostEngine).
     pub fn execute_tray_smartboost() -> Option<crate::backend::smart_boost::BoostResult> {
-        static RUN_GUARD: AtomicBool = AtomicBool::new(false);
-
-        if RUN_GUARD
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_err()
-        {
-            return None;
-        }
-
         let result = crate::backend::smart_boost::SmartBoostEngine::execute_boost(true, true);
-        RUN_GUARD.store(false, Ordering::SeqCst);
-        Some(result)
+        if result.already_running {
+            None
+        } else {
+            Some(result)
+        }
     }
 }
 

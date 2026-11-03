@@ -68,13 +68,15 @@ impl ServicesPage {
 
         let all_services: Rc<RefCell<Vec<ServiceInfo>>> = Rc::new(RefCell::new(Vec::new()));
         let filter_text: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
+        let populate_self_rc: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
 
-        let populate = {
+        let populate: Rc<dyn Fn()> = {
             let list_box = list_box.clone();
             let all_services = all_services.clone();
             let filter_text = filter_text.clone();
+            let populate_self_rc = populate_self_rc.clone();
 
-            move || {
+            Rc::new(move || {
                 while let Some(child) = list_box.first_child() {
                     list_box.remove(&child);
                 }
@@ -100,6 +102,7 @@ impl ServicesPage {
                     let row = ActionRow::builder()
                         .title(&s.unit)
                         .subtitle(format!("{} [{}]", s.description, s.active))
+                        .use_markup(false)
                         .build();
 
                     let icon_name = if s.is_running {
@@ -123,17 +126,37 @@ impl ServicesPage {
 
                     let unit_str = s.unit.clone();
                     let is_running = s.is_running;
+                    let all_services_toggle = all_services.clone();
+                    let populate_toggle = populate_self_rc.clone();
                     toggle_btn.connect_clicked(move |b| {
                         b.set_sensitive(false);
+                        b.set_label(if is_running { "Stopping..." } else { "Starting..." });
                         let action = if is_running { "stop" } else { "start" };
-                        let _ = ServiceManager::manage_service(&unit_str, action);
+                        let unit_run = unit_str.clone();
+                        let (tx, rx) = async_channel::unbounded();
+                        std::thread::spawn(move || {
+                            let _ = ServiceManager::manage_service(&unit_run, action);
+                            let updated = ServiceManager::list_services();
+                            let _ = tx.send_blocking(updated);
+                        });
+                        let all_s = all_services_toggle.clone();
+                        let pop_rc = populate_toggle.clone();
+                        glib::MainContext::default().spawn_local(async move {
+                            if let Ok(updated) = rx.recv().await {
+                                *all_s.borrow_mut() = updated;
+                                if let Some(ref f) = *pop_rc.borrow() {
+                                    f();
+                                }
+                            }
+                        });
                     });
 
                     row.add_suffix(&toggle_btn);
                     list_box.append(&row);
                 }
-            }
+            })
         };
+        *populate_self_rc.borrow_mut() = Some(populate.clone());
 
         let refresh_data = {
             let all_services = all_services.clone();

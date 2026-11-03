@@ -21,7 +21,7 @@ pub fn build_battery_view(
     for bat in batteries {
         // Battery Health Group
         let health_grp = adw::PreferencesGroup::builder()
-            .title(&format!("Battery Health & Status ({})", bat.name))
+            .title(&format!("Battery Health &amp; Status ({})", gtk4::glib::markup_escape_text(&bat.name)))
             .description("Real-time battery metrics and capacity wear level")
             .build();
 
@@ -68,6 +68,7 @@ pub fn build_battery_view(
         let status_row = adw::ActionRow::builder()
             .title("Operating State")
             .subtitle(&format!("{} (Charge: {}%)", bat.status, bat.percentage))
+            .use_markup(false)
             .build();
         status_row.add_prefix(&gtk4::Image::from_icon_name("battery-symbolic"));
         health_grp.add(&status_row);
@@ -76,6 +77,7 @@ pub fn build_battery_view(
         let rate_row = adw::ActionRow::builder()
             .title("Power Rate")
             .subtitle(&charge_sub)
+            .use_markup(false)
             .build();
         rate_row.add_prefix(&gtk4::Image::from_icon_name("power-profile-balanced-symbolic"));
         health_grp.add(&rate_row);
@@ -84,6 +86,7 @@ pub fn build_battery_view(
         let volt_row = adw::ActionRow::builder()
             .title("Voltage Rating")
             .subtitle(&volt_sub)
+            .use_markup(false)
             .build();
         volt_row.add_prefix(&gtk4::Image::from_icon_name("preferences-system-symbolic"));
         health_grp.add(&volt_row);
@@ -92,6 +95,7 @@ pub fn build_battery_view(
         let cycles_row = adw::ActionRow::builder()
             .title("Cycle Count")
             .subtitle(&cycles_sub)
+            .use_markup(false)
             .build();
         cycles_row.add_prefix(&gtk4::Image::from_icon_name("view-refresh-symbolic"));
         health_grp.add(&cycles_row);
@@ -118,6 +122,7 @@ pub fn build_battery_view(
         let mfg_row = adw::ActionRow::builder()
             .title("Cell Manufacturer")
             .subtitle(&mfg_sub)
+            .use_markup(false)
             .build();
         mfg_row.add_prefix(&gtk4::Image::from_icon_name("org.gnome.Settings-symbolic"));
         part_grp.add(&mfg_row);
@@ -126,6 +131,7 @@ pub fn build_battery_view(
         let specs_row = adw::ActionRow::builder()
             .title("Target Form Factor & Ratings")
             .subtitle(&specs_sub)
+            .use_markup(false)
             .build();
         specs_row.add_prefix(&gtk4::Image::from_icon_name("dialog-information-symbolic"));
         part_grp.add(&specs_row);
@@ -135,6 +141,7 @@ pub fn build_battery_view(
             let expander = adw::ExpanderRow::builder()
                 .title("Interchangeable / Compatible FRU Numbers")
                 .subtitle("Alternative OEM parts directly compatible with this machine")
+                .use_markup(false)
                 .build();
             expander.add_prefix(&gtk4::Image::from_icon_name("emblem-documents-symbolic"));
 

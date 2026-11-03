@@ -7,6 +7,7 @@ use gtk4::{
 use libadwaita as adw;
 use adw::prelude::*;
 use adw::{ActionRow, Clamp, ComboRow, ExpanderRow, PasswordEntryRow, PreferencesGroup, Toast, ToastOverlay};
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
 use crate::ai::{
@@ -15,6 +16,51 @@ use crate::ai::{
 };
 use crate::backend::host_bridge::HostBridge;
 use crate::backend::settings::AppSettings;
+
+fn provider_info_from_index(idx: u32) -> (&'static str, &'static str, &'static str) {
+    match idx {
+        0 => ("antigravity", "agent://antigravity", "antigravity-local"),
+        1 => ("openclaude", "agent://openclaude", "claude-session"),
+        2 => ("pi-agent", "agent://pi-agent", "pi-session"),
+        3 => ("codex", "agent://codex", "codex-session"),
+        4 => ("cursor", "agent://cursor", "cursor-agent"),
+        5 => ("lmstudio", "http://localhost:1234/v1", "nemotron"),
+        6 => ("ollama", "http://localhost:11434/v1", "nemotron"),
+        7 => ("llamacpp", "http://localhost:8080/v1", "default"),
+        8 => ("openai", "https://api.openai.com/v1", "gpt-4o-mini"),
+        9 => ("claude", "https://api.anthropic.com/v1", "claude-3-7-sonnet-latest"),
+        10 => ("gemini", "https://generativelanguage.googleapis.com/v1beta", "gemini-2.0-flash"),
+        _ => ("custom", "http://localhost:8000/v1", "default"),
+    }
+}
+
+fn provider_index_from_id(id: &str) -> u32 {
+    match id {
+        "antigravity" => 0,
+        "openclaude" => 1,
+        "pi-agent" => 2,
+        "codex" => 3,
+        "cursor" => 4,
+        "lmstudio" => 5,
+        "ollama" => 6,
+        "llamacpp" => 7,
+        "openai" => 8,
+        "claude" => 9,
+        "gemini" => 10,
+        "custom" => 11,
+        _ => 8,
+    }
+}
+
+fn execute_ai_fix_command(cmd: &str) -> Result<(i32, String, String), String> {
+    let trimmed = cmd.trim();
+    if trimmed.contains("sudo ") {
+        let elevated = trimmed.replace("sudo ", "");
+        HostBridge::run_privileged(&["sh", "-c", &elevated])
+    } else {
+        HostBridge::run_command("sh", &["-c", trimmed])
+    }
+}
 
 pub struct AIPage;
 
@@ -60,12 +106,17 @@ impl AIPage {
         optimizer_group.add(&triage_action_row);
 
         let triage_progress = ProgressBar::builder()
-            .visible(false)
             .pulse_step(0.1)
+            .margin_top(8)
+            .margin_bottom(8)
             .margin_start(12)
             .margin_end(12)
             .build();
-        optimizer_group.add(&ActionRow::builder().child(&triage_progress).build());
+        let triage_progress_row = ActionRow::builder()
+            .child(&triage_progress)
+            .visible(false)
+            .build();
+        optimizer_group.add(&triage_progress_row);
 
         let recs_box = GtkBox::builder()
             .orientation(Orientation::Vertical)
@@ -73,7 +124,11 @@ impl AIPage {
             .margin_top(4)
             .margin_bottom(8)
             .build();
-        optimizer_group.add(&ActionRow::builder().child(&recs_box).build());
+        let recs_row = ActionRow::builder()
+            .child(&recs_box)
+            .visible(false)
+            .build();
+        optimizer_group.add(&recs_row);
 
         root_box.append(&optimizer_group);
 
@@ -87,7 +142,8 @@ impl AIPage {
 
         let agents_expander = ExpanderRow::builder()
             .title("Detected Local Agents &amp; Local Runners")
-            .subtitle("Click to inspect active local sessions and runners")
+            .subtitle("Scanning active local sessions and runners...")
+            .use_markup(false)
             .build();
 
         let scan_btn = Button::builder()
@@ -97,13 +153,6 @@ impl AIPage {
             .build();
         agents_expander.add_suffix(&scan_btn);
 
-        let detected_box = GtkBox::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(6)
-            .margin_top(6)
-            .margin_bottom(6)
-            .build();
-        agents_expander.add_row(&ActionRow::builder().child(&detected_box).build());
         agents_group.add(&agents_expander);
         root_box.append(&agents_group);
 
@@ -131,21 +180,7 @@ impl AIPage {
         ]);
 
         let saved_cfg = AppSettings::get();
-
-        let initial_provider_idx = match saved_cfg.ai_provider.as_str() {
-            "antigravity" => 0,
-            "openclaude" => 1,
-            "pi-agent" => 2,
-            "codex" => 3,
-            "cursor" => 4,
-            "lmstudio" => 5,
-            "ollama" => 6,
-            "llamacpp" => 7,
-            "openai" => 8,
-            "claude" => 9,
-            "gemini" => 10,
-            _ => 8,
-        };
+        let initial_provider_idx = provider_index_from_id(&saved_cfg.ai_provider);
 
         let provider_row = ComboRow::builder()
             .title("Active Provider / Source")
@@ -282,6 +317,7 @@ impl AIPage {
         let proposed_row = ActionRow::builder()
             .title("Proposed Terminal Fix")
             .subtitle("No command proposed yet")
+            .use_markup(false)
             .build();
 
         let exec_fix_btn = Button::builder()
@@ -306,62 +342,86 @@ impl AIPage {
         // Signal Connectors & Logic
         // ---------------------------------------------------------
 
-        // Populate Local Agents & Servers Box
+        // Populate Local Agents & Servers asynchronously so startup never blocks
+        let expander_rows: Rc<RefCell<Vec<ActionRow>>> = Rc::new(RefCell::new(Vec::new()));
         let populate_local_status = {
-            let db = detected_box.clone();
             let ae = agents_expander.clone();
+            let rows_rc = expander_rows.clone();
             move || {
-                while let Some(child) = db.first_child() {
-                    db.remove(&child);
-                }
+                let (tx, rx) = async_channel::unbounded();
+                std::thread::spawn(move || {
+                    let agents = LocalAgentBridge::detect_agents();
+                    let servers = LocalServerDetector::scan_local_servers();
+                    let _ = tx.send_blocking((agents, servers));
+                });
 
-                let agents = LocalAgentBridge::detect_agents();
-                let servers = LocalServerDetector::scan_local_servers();
+                let ae_inner = ae.clone();
+                let rows_inner = rows_rc.clone();
+                glib::MainContext::default().spawn_local(async move {
+                    if let Ok((agents, servers)) = rx.recv().await {
+                        for old_row in rows_inner.borrow_mut().drain(..) {
+                            ae_inner.remove(&old_row);
+                        }
 
-                let mut active_count = 0;
+                        let mut active_count = 0;
 
-                // Agents
-                for agent in &agents {
-                    let r = ActionRow::builder()
-                        .title(&agent.name)
-                        .subtitle(format!("{} | {}", if agent.installed { "Installed" } else { "Not Found" }, agent.session_info))
-                        .build();
+                        for agent in &agents {
+                            let r = ActionRow::builder()
+                                .title(&agent.name)
+                                .subtitle(format!(
+                                    "{} | {}",
+                                    if agent.installed { "Installed" } else { "Not Found" },
+                                    agent.session_info
+                                ))
+                                .use_markup(false)
+                                .build();
 
-                    let icon_name = if agent.session_detected {
-                        active_count += 1;
-                        "emblem-ok-symbolic"
-                    } else if agent.installed {
-                        "emblem-default-symbolic"
-                    } else {
-                        "dialog-information-symbolic"
-                    };
-                    r.add_prefix(&Image::from_icon_name(icon_name));
-                    db.append(&r);
-                }
+                            let icon_name = if agent.session_detected {
+                                active_count += 1;
+                                "emblem-ok-symbolic"
+                            } else if agent.installed {
+                                "emblem-default-symbolic"
+                            } else {
+                                "dialog-information-symbolic"
+                            };
+                            r.add_prefix(&Image::from_icon_name(icon_name));
+                            ae_inner.add_row(&r);
+                            rows_inner.borrow_mut().push(r);
+                        }
 
-                // Servers
-                for server in &servers {
-                    let r = ActionRow::builder()
-                        .title(&server.name)
-                        .subtitle(format!(
-                            "Port: {} | {} | Models: {}",
-                            server.port,
-                            if server.is_online { "Online" } else { "Offline" },
-                            if server.detected_models.is_empty() { "None detected".to_string() } else { server.detected_models.join(", ") }
-                        ))
-                        .build();
+                        for server in &servers {
+                            let r = ActionRow::builder()
+                                .title(&server.name)
+                                .subtitle(format!(
+                                    "Port: {} | {} | Models: {}",
+                                    server.port,
+                                    if server.is_online { "Online" } else { "Offline" },
+                                    if server.detected_models.is_empty() {
+                                        "None detected".to_string()
+                                    } else {
+                                        server.detected_models.join(", ")
+                                    }
+                                ))
+                                .use_markup(false)
+                                .build();
 
-                    let icon_name = if server.is_online {
-                        active_count += 1;
-                        "emblem-ok-symbolic"
-                    } else {
-                        "dialog-information-symbolic"
-                    };
-                    r.add_prefix(&Image::from_icon_name(icon_name));
-                    db.append(&r);
-                }
+                            let icon_name = if server.is_online {
+                                active_count += 1;
+                                "emblem-ok-symbolic"
+                            } else {
+                                "dialog-information-symbolic"
+                            };
+                            r.add_prefix(&Image::from_icon_name(icon_name));
+                            ae_inner.add_row(&r);
+                            rows_inner.borrow_mut().push(r);
+                        }
 
-                ae.set_subtitle(&format!("{} active local agent(s) / runner server(s) detected", active_count));
+                        ae_inner.set_subtitle(&format!(
+                            "{} active local agent(s) / runner server(s) detected",
+                            active_count
+                        ));
+                    }
+                });
             }
         };
         populate_local_status();
@@ -383,20 +443,7 @@ impl AIPage {
             let ue = url_entry.clone();
             let me = model_entry.clone();
             provider_row.connect_selected_notify(move |combo| {
-                let (prov_id, default_url, default_model) = match combo.selected() {
-                    0 => ("antigravity", "agent://antigravity", "antigravity-local"),
-                    1 => ("openclaude", "agent://openclaude", "claude-session"),
-                    2 => ("pi-agent", "agent://pi-agent", "pi-session"),
-                    3 => ("codex", "agent://codex", "codex-session"),
-                    4 => ("cursor", "agent://cursor", "cursor-agent"),
-                    5 => ("lmstudio", "http://localhost:1234/v1", "nemotron"),
-                    6 => ("ollama", "http://localhost:11434/v1", "nemotron"),
-                    7 => ("llamacpp", "http://localhost:8080/v1", "default"),
-                    8 => ("openai", "https://api.openai.com/v1", "gpt-4o-mini"),
-                    9 => ("claude", "https://api.anthropic.com/v1", "claude-3-7-sonnet-latest"),
-                    10 => ("gemini", "https://generativelanguage.googleapis.com/v1beta", "gemini-2.0-flash"),
-                    _ => ("custom", "http://localhost:8000/v1", "default"),
-                };
+                let (prov_id, default_url, default_model) = provider_info_from_index(combo.selected());
 
                 ue.set_text(default_url);
                 me.set_text(default_model);
@@ -416,7 +463,7 @@ impl AIPage {
                 AppSettings::update(|cfg| cfg.ai_endpoint = val);
             });
 
-            key_row.connect_entry_activated(move |e| {
+            key_row.connect_changed(move |e| {
                 let val = e.text().to_string();
                 AppSettings::update(|cfg| cfg.ai_api_key = val);
             });
@@ -440,22 +487,7 @@ impl AIPage {
                 tb.set_sensitive(false);
                 tb.set_label("Testing...");
 
-                let prov_idx = pr.selected();
-                let prov_name = match prov_idx {
-                    0 => "antigravity",
-                    1 => "openclaude",
-                    2 => "pi-agent",
-                    3 => "codex",
-                    4 => "cursor",
-                    5 => "lmstudio",
-                    6 => "ollama",
-                    7 => "llamacpp",
-                    8 => "openai",
-                    9 => "claude",
-                    10 => "gemini",
-                    _ => "custom",
-                };
-
+                let (prov_name, _, _) = provider_info_from_index(pr.selected());
                 let url = ue.text().to_string();
                 let key = ke.text().to_string();
                 let model = me.text().to_string();
@@ -498,7 +530,7 @@ impl AIPage {
         }
 
         // Active proposed command storage
-        let active_cmd_rc: Rc<std::cell::RefCell<Option<String>>> = Rc::new(std::cell::RefCell::new(None));
+        let active_cmd_rc: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
 
         // Connect Ask AI button
         {
@@ -524,22 +556,7 @@ impl AIPage {
                 eb.set_sensitive(false);
                 p_row.set_subtitle("Thinking...");
 
-                let prov_idx = pr.selected();
-                let prov_name = match prov_idx {
-                    0 => "antigravity",
-                    1 => "openclaude",
-                    2 => "pi-agent",
-                    3 => "codex",
-                    4 => "cursor",
-                    5 => "lmstudio",
-                    6 => "ollama",
-                    7 => "llamacpp",
-                    8 => "openai",
-                    9 => "claude",
-                    10 => "gemini",
-                    _ => "custom",
-                };
-
+                let (prov_name, _, _) = provider_info_from_index(pr.selected());
                 let url = ue.text().to_string();
                 let key = ke.text().to_string();
                 let model = me.text().to_string();
@@ -624,7 +641,7 @@ impl AIPage {
                     let (tx, rx) = mpsc::channel();
 
                     std::thread::spawn(move || {
-                        let res = HostBridge::run_command("sh", &["-c", &cmd]);
+                        let res = execute_ai_fix_command(&cmd);
                         let _ = tx.send(res);
                     });
 
@@ -661,7 +678,9 @@ impl AIPage {
         {
             let run_btn = run_triage_btn.clone();
             let tp = triage_progress.clone();
+            let tpr = triage_progress_row.clone();
             let rb = recs_box.clone();
+            let rr = recs_row.clone();
             let pr = provider_row.clone();
             let ue = url_entry.clone();
             let ke = key_row.clone();
@@ -671,24 +690,10 @@ impl AIPage {
             run_triage_btn.connect_clicked(move |_| {
                 run_btn.set_sensitive(false);
                 run_btn.set_label("Analyzing System...");
-                tp.set_visible(true);
+                tpr.set_visible(true);
+                tp.pulse();
 
-                let prov_idx = pr.selected();
-                let prov_name = match prov_idx {
-                    0 => "antigravity",
-                    1 => "openclaude",
-                    2 => "pi-agent",
-                    3 => "codex",
-                    4 => "cursor",
-                    5 => "lmstudio",
-                    6 => "ollama",
-                    7 => "llamacpp",
-                    8 => "openai",
-                    9 => "claude",
-                    10 => "gemini",
-                    _ => "custom",
-                };
-
+                let (prov_name, _, _) = provider_info_from_index(pr.selected());
                 let url = ue.text().to_string();
                 let key = ke.text().to_string();
                 let model = me.text().to_string();
@@ -703,14 +708,17 @@ impl AIPage {
 
                 let run_btn_c = run_btn.clone();
                 let tp_c = tp.clone();
+                let tpr_c = tpr.clone();
                 let rb_c = rb.clone();
+                let rr_c = rr.clone();
                 let toast_c = toast_rc_triage.clone();
 
                 glib::timeout_add_local(std::time::Duration::from_millis(150), move || {
+                    tp_c.pulse();
                     if let Ok(res) = rx.try_recv() {
                         run_btn_c.set_sensitive(true);
                         run_btn_c.set_label("Run AI Optimization Triage");
-                        tp_c.set_visible(false);
+                        tpr_c.set_visible(false);
 
                         while let Some(child) = rb_c.first_child() {
                             rb_c.remove(&child);
@@ -718,16 +726,18 @@ impl AIPage {
 
                         match res {
                             Ok(report) => {
+                                rr_c.set_visible(true);
                                 if let Some(ref o) = *toast_c {
                                     o.add_toast(Toast::new("AI Optimization Triage completed!"));
                                 }
 
                                 let summary_row = ActionRow::builder()
-                                    .title("System Health &amp; Telemetry Status")
+                                    .title("System Health & Telemetry Status")
                                     .subtitle(format!(
                                         "CPU: {} | RAM: {} | Kernel: {}",
                                         report.cpu_summary, report.memory_summary, report.kernel_summary
                                     ))
+                                    .use_markup(false)
                                     .build();
                                 summary_row.add_prefix(&Image::from_icon_name("utilities-system-monitor-symbolic"));
                                 rb_c.append(&summary_row);
@@ -735,6 +745,7 @@ impl AIPage {
                                 let insight_row = ActionRow::builder()
                                     .title("AI Optimization Tuning Insights")
                                     .subtitle(&report.ai_insights)
+                                    .use_markup(false)
                                     .build();
                                 insight_row.add_prefix(&Image::from_icon_name("starred-symbolic"));
                                 rb_c.append(&insight_row);
@@ -743,6 +754,7 @@ impl AIPage {
                                     let r_row = ActionRow::builder()
                                         .title(&rec.title)
                                         .subtitle(format!("[{}] {}", rec.category, rec.description))
+                                        .use_markup(false)
                                         .build();
 
                                     let icon_name = match rec.severity.as_str() {
@@ -769,7 +781,7 @@ impl AIPage {
                                             let (tx_fix, rx_fix) = mpsc::channel();
 
                                             std::thread::spawn(move || {
-                                                let r = HostBridge::run_command("sh", &["-c", &cmd_run]);
+                                                let r = execute_ai_fix_command(&cmd_run);
                                                 let _ = tx_fix.send(r);
                                             });
 

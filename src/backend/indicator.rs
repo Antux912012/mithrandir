@@ -1,16 +1,20 @@
 use crate::backend::host_bridge::HostBridge;
+use crate::backend::settings::AppSettings;
 use crate::backend::smart_boost::SmartBoostEngine;
 
 pub struct NotificationManager;
 
 impl NotificationManager {
-    /// Dispatches a desktop notification with application icon.
+    /// Dispatches a desktop notification with application icon if desktop notifications are enabled.
     pub fn send_notification(summary: &str, body: &str) {
+        if !AppSettings::get().desktop_notifications {
+            return;
+        }
         let _ = HostBridge::run_command(
             "notify-send",
             &[
-                "--app-name=Mithrandir-RS",
-                "--icon=io.github.antonio.Mithrandir",
+                "--app-name=Mithrandir",
+                "--icon=io.github.antux912012.Mithrandir",
                 summary,
                 body,
             ],

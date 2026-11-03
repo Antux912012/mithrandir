@@ -49,6 +49,7 @@ pub fn build_memory_view(
     let total_row = adw::ActionRow::builder()
         .title("Total Memory Recognized")
         .subtitle(&format!("{:.2} GiB", mem.total_gib))
+        .use_markup(false)
         .build();
     total_row.add_prefix(&gtk4::Image::from_icon_name("media-flash-symbolic"));
     util_grp.add(&total_row);
@@ -57,7 +58,7 @@ pub fn build_memory_view(
 
     // RAM Upgrade & Replacement Group
     let upgrade_grp = adw::PreferencesGroup::builder()
-        .title("Memory Upgrade & Replacement Guide")
+        .title("Memory Upgrade &amp; Replacement Guide")
         .description("Crucial specifications for purchasing compatible RAM modules")
         .build();
 
@@ -73,6 +74,7 @@ pub fn build_memory_view(
     let pin_row = adw::ActionRow::builder()
         .title("Pin Configuration & Voltage")
         .subtitle(&mem.pin_count)
+        .use_markup(false)
         .build();
     pin_row.add_prefix(&gtk4::Image::from_icon_name("dialog-information-symbolic"));
     upgrade_grp.add(&pin_row);
@@ -89,6 +91,7 @@ pub fn build_memory_view(
     let max_row = adw::ActionRow::builder()
         .title("Maximum System Capacity")
         .subtitle(&mem.max_capacity_estimate)
+        .use_markup(false)
         .build();
     max_row.add_prefix(&gtk4::Image::from_icon_name("starred-symbolic"));
     upgrade_grp.add(&max_row);

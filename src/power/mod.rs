@@ -6,9 +6,10 @@ pub use coordinator::{
     set_active_preset, PowerPreset,
 };
 pub use profiles::{
-    get_available_epp, get_available_governors, get_current_epp, get_current_governor,
-    get_power_profiles_daemon_active_profile, is_turbo_boost_enabled, is_turbo_boost_supported,
-    set_aspm_policy, set_epp, set_governor, set_power_profiles_daemon_profile, set_turbo_boost,
+    get_available_epp, get_available_governors, get_current_aspm_policy, get_current_epp,
+    get_current_governor, get_power_profiles_daemon_active_profile, is_turbo_boost_enabled,
+    is_turbo_boost_supported, set_aspm_policy, set_epp, set_governor,
+    set_power_profiles_daemon_profile, set_turbo_boost,
 };
 
 use std::sync::atomic::{AtomicBool, Ordering};

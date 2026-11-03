@@ -35,74 +35,35 @@ impl AIOptimizerEngine {
     /// Gathers host diagnostic metrics into an anonymized optimization prompt.
     pub fn gather_optimization_context() -> String {
         let cpu = SystemMonitor::get_cpu_info();
-        let mem = SystemMonitor::get_memory_info();
         let kinfo = detect_kernel();
         let gov = get_current_governor().unwrap_or_else(|| "unknown".to_string());
         let epp = get_current_epp().unwrap_or_else(|| "unknown".to_string());
         let turbo = is_turbo_boost_enabled().map(|b| if b { "enabled" } else { "disabled" }).unwrap_or("n/a");
 
-        let disks = SystemMonitor::get_disks_info();
-        let root_disk = disks.iter().find(|d| d.mount_point == "/");
-        let disk_str = if let Some(d) = root_disk {
-            format!("{:.1}GB free of {:.1}GB ({:.1}% used)", d.available_gb, d.total_gb, d.percent)
-        } else {
-            "Unknown".to_string()
-        };
-
         let (tmp_bytes, tmp_count) = CleanerEngine::scan_user_tmp();
         let tmp_mb = (tmp_bytes as f64 / (1024.0 * 1024.0) * 10.0).round() / 10.0;
 
-        let failed_units = HostBridge::run_command("systemctl", &["--failed", "--no-legend"])
-            .map(|(_, out, _)| {
-                let lines: Vec<&str> = out.lines().filter(|l| !l.trim().is_empty()).take(10).collect();
-                if lines.is_empty() {
-                    "None (all systemd services running healthy)".to_string()
-                } else {
-                    lines.join("; ")
-                }
-            })
-            .unwrap_or_else(|_| "Unavailable".to_string());
-
-        let journal_errors = HostBridge::run_command("journalctl", &["-p", "3", "-xb", "-n", "10", "--no-pager"])
-            .map(|(_, out, _)| {
-                let lines: Vec<&str> = out.lines().filter(|l| !l.trim().is_empty()).take(5).collect();
-                if lines.is_empty() {
-                    "None".to_string()
-                } else {
-                    lines.join("\n")
-                }
-            })
-            .unwrap_or_else(|_| "Unavailable".to_string());
+        let base_snapshot = crate::backend::diagnostics::DiagnosticsCollector::gather_system_snapshot();
 
         let context = format!(
-            "Host Diagnostics & Telemetry Snapshot:\n\
+            "{}\n\
+            Hardware & Scheduler Telemetry:\n\
             - CPU: {} cores, {} (Usage: {:.1}%)\n\
             - Governor: {} | EPP: {} | Turbo: {}\n\
-            - Kernel: {} (CachyOS: {}, BORE active: {}, SCX: {})\n\
-            - Memory: {:.0}MB used of {:.0}MB ({:.1}% used, {:.0}MB available)\n\
-            - Root Disk: {}\n\
-            - User Temp Files: {:.1}MB ({} files in /tmp)\n\
-            - Failed Systemd Services: {}\n\
-            - Recent Journal Priority Errors:\n{}\n",
+            - Scheduler: CachyOS={}, BORE={}, SCX={}\n\
+            - User Temp Files: {:.1}MB ({} files in /tmp)\n",
+            base_snapshot,
             cpu.core_count,
             cpu.brand,
             cpu.usage_percent,
             gov,
             epp,
             turbo,
-            kinfo.kernel_release,
             kinfo.is_cachyos,
             kinfo.bore_enabled,
             kinfo.scx_active_scheduler,
-            mem.used_mb,
-            mem.total_mb,
-            mem.percent,
-            mem.available_mb,
-            disk_str,
             tmp_mb,
             tmp_count,
-            failed_units,
-            journal_errors
         );
 
         SafetyGuard::redact_pii(&context)

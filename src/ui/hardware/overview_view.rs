@@ -44,6 +44,7 @@ pub fn build_overview_view(
     let chassis_row = adw::ActionRow::builder()
         .title("Chassis Form Factor")
         .subtitle(&sys.chassis_type)
+        .use_markup(false)
         .build();
     let chassis_icon = gtk4::Image::from_icon_name("preferences-desktop-display-symbolic");
     chassis_row.add_prefix(&chassis_icon);
@@ -64,14 +65,14 @@ pub fn build_overview_view(
 
     // Memory
     let mem_sub = format!("{:.1} GB Total Installed ({})", mem.total_gib, mem.form_factor);
-    let mem_row = adw::ActionRow::builder().title("Installed Memory").subtitle(&mem_sub).build();
+    let mem_row = adw::ActionRow::builder().title("Installed Memory").subtitle(&mem_sub).use_markup(false).build();
     mem_row.add_prefix(&gtk4::Image::from_icon_name("media-flash-symbolic"));
     comp_grp.add(&mem_row);
 
     // Storage
     if let Some(first_disk) = disks.first() {
         let disk_sub = format!("{} ({:.0} GB, {})", first_disk.model, first_disk.capacity_gb, first_disk.interface_type);
-        let disk_row = adw::ActionRow::builder().title("Primary Storage").subtitle(&disk_sub).build();
+        let disk_row = adw::ActionRow::builder().title("Primary Storage").subtitle(&disk_sub).use_markup(false).build();
         disk_row.add_prefix(&gtk4::Image::from_icon_name("drive-harddisk-symbolic"));
         comp_grp.add(&disk_row);
     }
@@ -79,7 +80,7 @@ pub fn build_overview_view(
     // Battery
     if let Some(bat) = batteries.first() {
         let bat_sub = format!("{:.1}% Health ({}) — {:.1} Wh remaining", bat.health_percent, bat.status, bat.energy_now_wh);
-        let bat_row = adw::ActionRow::builder().title("Battery Status").subtitle(&bat_sub).build();
+        let bat_row = adw::ActionRow::builder().title("Battery Status").subtitle(&bat_sub).use_markup(false).build();
         let bat_icon = if bat.health_percent > 70.0 { "battery-good-symbolic" } else { "battery-caution-symbolic" };
         bat_row.add_prefix(&gtk4::Image::from_icon_name(bat_icon));
         comp_grp.add(&bat_row);
@@ -88,7 +89,7 @@ pub fn build_overview_view(
     // Display
     if let Some(disp) = displays.first() {
         let disp_sub = format!("{} ({})", disp.panel_model, disp.resolution);
-        let disp_row = adw::ActionRow::builder().title("Primary Display").subtitle(&disp_sub).build();
+        let disp_row = adw::ActionRow::builder().title("Primary Display").subtitle(&disp_sub).use_markup(false).build();
         disp_row.add_prefix(&gtk4::Image::from_icon_name("video-display-symbolic"));
         comp_grp.add(&disp_row);
     }
@@ -97,7 +98,7 @@ pub fn build_overview_view(
 
     // Firmware & Motherboard Group
     let fw_grp = adw::PreferencesGroup::builder()
-        .title("Firmware & Motherboard")
+        .title("Firmware &amp; Motherboard")
         .build();
 
     let bios_sub = format!("Version {} (Released {})", sys.bios_version, sys.bios_date);
@@ -107,6 +108,7 @@ pub fn build_overview_view(
     let board_row = adw::ActionRow::builder()
         .title("Motherboard ID")
         .subtitle(&sys.board_name)
+        .use_markup(false)
         .build();
     board_row.add_prefix(&gtk4::Image::from_icon_name("system-run-symbolic"));
     fw_grp.add(&board_row);

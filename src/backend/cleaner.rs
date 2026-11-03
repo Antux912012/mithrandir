@@ -86,7 +86,7 @@ impl CleanerEngine {
         "/var/cache/pacman/pkg",
     ];
 
-    pub fn get_categories() -> Vec<CleanCategory> {
+    pub fn get_category_definitions() -> Vec<CleanCategory> {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
         let home_p = PathBuf::from(&home);
 
@@ -110,51 +110,65 @@ impl CleanerEngine {
             ("package_cache", "Package Manager Cache", "Cached APT, DNF, or Pacman package archives", pkg_cache_path),
         ];
 
-        let home_ref = home_p.clone();
-        cats.into_par_iter()
-            .map(|(id, name, desc, path)| {
-                let (size_bytes, file_count) = if id == "tmp" {
-                    Self::scan_user_tmp()
-                } else if id == "user_cache" {
-                    let exclusions = ["thumbnails", "mozilla", "google-chrome", "chromium", "BraveSoftware", "microsoft-edge", "pip"];
-                    Self::scan_path_excluding(&path, &exclusions)
-                } else if id == "browser_cache" {
-                    let (s1, c1) = Self::scan_path(&home_ref.join(".cache/mozilla"));
-                    let (s2, c2) = Self::scan_path(&home_ref.join(".cache/google-chrome"));
-                    let (s3, c3) = Self::scan_path(&home_ref.join(".cache/chromium"));
-                    (s1 + s2 + s3, c1 + c2 + c3)
-                } else if id == "dev_cache" {
-                    let (s1, c1) = Self::scan_path(&home_ref.join(".cache/pip"));
-                    let (s2, c2) = Self::scan_path(&home_ref.join(".npm/_cacache"));
-                    let (s3, c3) = Self::scan_path(&home_ref.join(".cargo/registry/cache"));
-                    (s1 + s2 + s3, c1 + c2 + c3)
-                } else if id == "flatpak_cache" {
-                    crate::cleaners::scan_flatpak_cache(&path)
-                } else if id == "package_cache" {
-                    let mut total_s = 0;
-                    let mut total_c = 0;
-                    for p in Self::PKG_CACHE_DIRS {
-                        let pb = Path::new(p);
-                        if pb.exists() {
-                            let (s, c) = Self::scan_path(pb);
-                            total_s += s;
-                            total_c += c;
-                        }
+        cats.into_iter()
+            .map(|(id, name, desc, path)| CleanCategory {
+                id: id.to_string(),
+                name: name.to_string(),
+                description: desc.to_string(),
+                path,
+                size_bytes: 0,
+                file_count: 0,
+                size_mb: 0.0,
+            })
+            .collect()
+    }
+
+    pub fn get_categories() -> Vec<CleanCategory> {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+        let home_ref = PathBuf::from(&home);
+
+        Self::get_category_definitions()
+            .into_par_iter()
+            .map(|mut cat| {
+                let (size_bytes, file_count) = match cat.id.as_str() {
+                    "tmp" => Self::scan_user_tmp(),
+                    "user_cache" => {
+                        let exclusions = ["thumbnails", "mozilla", "google-chrome", "chromium", "BraveSoftware", "microsoft-edge", "pip"];
+                        Self::scan_path_excluding(&cat.path, &exclusions)
                     }
-                    (total_s, total_c)
-                } else {
-                    Self::scan_path(&path)
+                    "browser_cache" => {
+                        let (s1, c1) = Self::scan_path(&home_ref.join(".cache/mozilla"));
+                        let (s2, c2) = Self::scan_path(&home_ref.join(".cache/google-chrome"));
+                        let (s3, c3) = Self::scan_path(&home_ref.join(".cache/chromium"));
+                        (s1 + s2 + s3, c1 + c2 + c3)
+                    }
+                    "dev_cache" => {
+                        let (s1, c1) = Self::scan_path(&home_ref.join(".cache/pip"));
+                        let (s2, c2) = Self::scan_path(&home_ref.join(".npm/_cacache"));
+                        let (s3, c3) = Self::scan_path(&home_ref.join(".cargo/registry/cache"));
+                        (s1 + s2 + s3, c1 + c2 + c3)
+                    }
+                    "flatpak_cache" => crate::cleaners::scan_flatpak_cache(&cat.path),
+                    "package_cache" => {
+                        let mut total_s = 0;
+                        let mut total_c = 0;
+                        for p in Self::PKG_CACHE_DIRS {
+                            let pb = Path::new(p);
+                            if pb.exists() {
+                                let (s, c) = Self::scan_path(pb);
+                                total_s += s;
+                                total_c += c;
+                            }
+                        }
+                        (total_s, total_c)
+                    }
+                    _ => Self::scan_path(&cat.path),
                 };
 
-                CleanCategory {
-                    id: id.to_string(),
-                    name: name.to_string(),
-                    description: desc.to_string(),
-                    path,
-                    size_bytes,
-                    file_count,
-                    size_mb: ((size_bytes as f64 / (1024.0 * 1024.0)) * 10.0).round() / 10.0,
-                }
+                cat.size_bytes = size_bytes;
+                cat.file_count = file_count;
+                cat.size_mb = ((size_bytes as f64 / (1024.0 * 1024.0)) * 10.0).round() / 10.0;
+                cat
             })
             .collect()
     }

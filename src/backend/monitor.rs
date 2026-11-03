@@ -77,6 +77,8 @@ pub struct SystemSummary {
 }
 
 static SYSTEM_MUTEX: OnceLock<Mutex<System>> = OnceLock::new();
+static DISKS_MUTEX: OnceLock<Mutex<Disks>> = OnceLock::new();
+static STATIC_SUMMARY: OnceLock<SystemSummary> = OnceLock::new();
 static NET_PREV: OnceLock<Mutex<Option<(Instant, u64, u64)>>> = OnceLock::new();
 static THERMAL_PATHS: OnceLock<Vec<PathBuf>> = OnceLock::new();
 
@@ -190,7 +192,9 @@ impl SystemMonitor {
     }
 
     pub fn get_disks_info() -> Vec<DiskPartition> {
-        let disks = Disks::new_with_refreshed_list();
+        let disks_lock = DISKS_MUTEX.get_or_init(|| Mutex::new(Disks::new_with_refreshed_list()));
+        let mut disks = disks_lock.lock().unwrap();
+        disks.refresh(true);
         disks
             .iter()
             .map(|d| {
@@ -552,77 +556,79 @@ impl SystemMonitor {
     }
 
     pub fn get_system_summary() -> SystemSummary {
-        let distro = DistroDetector::detect();
-        let hostname = fs::read_to_string("/etc/hostname")
-            .ok()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .or_else(|| {
-                HostBridge::run_command("hostname", &[])
-                    .ok()
-                    .map(|(_, out, _)| out.trim().to_string())
-                    .filter(|s| !s.is_empty())
-            })
-            .unwrap_or_else(|| "localhost".to_string());
+        let base = STATIC_SUMMARY.get_or_init(|| {
+            let distro = DistroDetector::detect();
+            let hostname = fs::read_to_string("/etc/hostname")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .or_else(|| {
+                    HostBridge::run_command("hostname", &[])
+                        .ok()
+                        .map(|(_, out, _)| out.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                })
+                .unwrap_or_else(|| "localhost".to_string());
 
-        let kernel = fs::read_to_string("/proc/sys/kernel/osrelease")
-            .ok()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .or_else(|| {
-                HostBridge::run_command("uname", &["-r"])
-                    .ok()
-                    .map(|(_, out, _)| out.trim().to_string())
-                    .filter(|s| !s.is_empty())
-            })
-            .unwrap_or_else(|| "Unknown".to_string());
+            let kernel = fs::read_to_string("/proc/sys/kernel/osrelease")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .or_else(|| {
+                    HostBridge::run_command("uname", &["-r"])
+                        .ok()
+                        .map(|(_, out, _)| out.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                })
+                .unwrap_or_else(|| "Unknown".to_string());
 
-        let arch = HostBridge::run_command("uname", &["-m"])
-            .ok()
-            .and_then(|(code, out, _)| {
-                let s = out.trim().to_string();
-                if code == 0 && !s.is_empty() {
-                    Some(s)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| std::env::consts::ARCH.to_string());
+            let arch = std::env::consts::ARCH.to_string();
 
-        let mut cpu_model = String::new();
-        if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
-            for line in cpuinfo.lines() {
-                if line.contains("model name") {
-                    if let Some((_, val)) = line.split_once(':') {
-                        cpu_model = val.trim().to_string();
-                        break;
+            let mut cpu_model = String::new();
+            if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
+                for line in cpuinfo.lines() {
+                    if line.contains("model name") {
+                        if let Some((_, val)) = line.split_once(':') {
+                            cpu_model = val.trim().to_string();
+                            break;
+                        }
                     }
                 }
             }
-        }
-        if cpu_model.is_empty() {
-            if let Ok(lock) = get_system().lock() {
-                if let Some(first_cpu) = lock.cpus().first() {
-                    let b = first_cpu.brand().trim();
-                    if !b.is_empty() {
-                        cpu_model = b.to_string();
+            if cpu_model.is_empty() {
+                if let Ok(lock) = get_system().lock() {
+                    if let Some(first_cpu) = lock.cpus().first() {
+                        let b = first_cpu.brand().trim();
+                        if !b.is_empty() {
+                            cpu_model = b.to_string();
+                        }
                     }
                 }
             }
-        }
-        if cpu_model.is_empty() {
-            cpu_model = "Unknown".to_string();
-        }
+            if cpu_model.is_empty() {
+                cpu_model = "Unknown".to_string();
+            }
 
-        let desktop = std::env::var("XDG_CURRENT_DESKTOP")
-            .ok()
-            .filter(|s| !s.trim().is_empty())
-            .or_else(|| {
-                std::env::var("DESKTOP_SESSION")
-                    .ok()
-                    .filter(|s| !s.trim().is_empty())
-            })
-            .unwrap_or_else(|| "Unknown".to_string());
+            let desktop = std::env::var("XDG_CURRENT_DESKTOP")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| {
+                    std::env::var("DESKTOP_SESSION")
+                        .ok()
+                        .filter(|s| !s.trim().is_empty())
+                })
+                .unwrap_or_else(|| "Unknown".to_string());
+
+            SystemSummary {
+                hostname,
+                distro: distro.pretty_name,
+                kernel,
+                arch,
+                cpu_model,
+                desktop,
+                uptime_str: String::new(),
+            }
+        });
 
         let uptime_str = if let Ok(content) = fs::read_to_string("/proc/uptime") {
             if let Some(secs_str) = content.split_whitespace().next() {
@@ -641,14 +647,8 @@ impl SystemMonitor {
             "Unknown".to_string()
         };
 
-        SystemSummary {
-            hostname,
-            distro: distro.pretty_name,
-            kernel,
-            arch,
-            cpu_model,
-            desktop,
-            uptime_str,
-        }
+        let mut summary = base.clone();
+        summary.uptime_str = uptime_str;
+        summary
     }
 }

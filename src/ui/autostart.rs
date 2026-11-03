@@ -1,10 +1,10 @@
 use gtk4::prelude::*;
 use gtk4::{
-    Align, Box as GtkBox, Button, Image, Label, Orientation, ScrolledWindow, Switch,
+    Align, Box as GtkBox, Button, Image, Orientation, ScrolledWindow, Switch, Window,
 };
 use libadwaita as adw;
 use adw::prelude::*;
-use adw::{ActionRow, Clamp, PreferencesGroup, SwitchRow};
+use adw::{ActionRow, ButtonContent, Clamp, EntryRow, PreferencesGroup, PreferencesPage, PreferencesWindow, SwitchRow};
 use std::cell::RefCell;
 use std::rc::Rc;
 use crate::backend::autostart::AutostartManager;
@@ -47,50 +47,58 @@ impl AutostartPage {
         m_group.add(&m_switch_row);
         root_box.append(&m_group);
 
-        // 2. Startup Applications Group
-        let apps_header = GtkBox::builder()
-            .orientation(Orientation::Horizontal)
-            .spacing(12)
+        // 2. Startup Applications Group (HIG-compliant PreferencesGroup with header suffix)
+        let add_btn_content = ButtonContent::builder()
+            .label("Add Startup App")
+            .icon_name("list-add-symbolic")
+            .build();
+        let add_btn = Button::builder()
+            .child(&add_btn_content)
+            .valign(Align::Center)
+            .css_classes(vec!["suggested-action"])
             .build();
 
-        let title_box = GtkBox::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(2)
-            .hexpand(true)
+        let apps_group = PreferencesGroup::builder()
+            .title("Startup Applications")
+            .description("Manage programs configured to launch automatically on login")
+            .header_suffix(&add_btn)
             .build();
-
-        let lbl = Label::builder()
-            .label("Startup Applications")
-            .css_classes(vec!["title-3"])
-            .xalign(0.0)
-            .build();
-        let sub_lbl = Label::builder()
-            .label("Manage programs configured to launch automatically on login")
-            .css_classes(vec!["caption", "dim-label"])
-            .xalign(0.0)
-            .build();
-        title_box.append(&lbl);
-        title_box.append(&sub_lbl);
-        apps_header.append(&title_box);
-
-        root_box.append(&apps_header);
-
-        let apps_group = PreferencesGroup::builder().build();
         root_box.append(&apps_group);
 
-        let apps_group_rc = Rc::new(RefCell::new(apps_group));
+        let added_rows: Rc<RefCell<Vec<ActionRow>>> = Rc::new(RefCell::new(Vec::new()));
 
-        let reload_entries = {
-            let apps_group_rc = apps_group_rc.clone();
+        let reload_entries: Rc<dyn Fn()> = {
+            let group = apps_group.clone();
+            let added_rows = added_rows.clone();
 
-            move || {
-                let group = apps_group_rc.borrow().clone();
+            Rc::new(move || {
+                for old_row in added_rows.borrow_mut().drain(..) {
+                    group.remove(&old_row);
+                }
+
                 let entries = AutostartManager::list_entries();
+                if entries.is_empty() {
+                    let empty_row = ActionRow::builder()
+                        .title("No startup applications configured")
+                        .subtitle("Click 'Add Startup App' to register a command or application on login")
+                        .use_markup(false)
+                        .build();
+                    group.add(&empty_row);
+                    added_rows.borrow_mut().push(empty_row);
+                    return;
+                }
 
                 for e in entries {
+                    let subtitle = if !e.comment.is_empty() && e.comment != e.name {
+                        format!("{} — {}", e.comment, e.exec)
+                    } else {
+                        e.exec.clone()
+                    };
+
                     let row = ActionRow::builder()
                         .title(&e.name)
-                        .subtitle(&e.exec)
+                        .subtitle(&subtitle)
+                        .use_markup(false)
                         .build();
 
                     let icon_name = if !e.icon.is_empty() {
@@ -124,18 +132,74 @@ impl AutostartPage {
                         let e_del = e.clone();
                         let group_del = group.clone();
                         let row_del = row.clone();
+                        let rows_del = added_rows.clone();
 
                         del_btn.connect_clicked(move |_| {
                             let _ = AutostartManager::remove_entry(&e_del);
+                            rows_del.borrow_mut().retain(|r| r != &row_del);
                             group_del.remove(&row_del);
                         });
                         row.add_suffix(&del_btn);
                     }
 
                     group.add(&row);
+                    added_rows.borrow_mut().push(row);
                 }
-            }
+            })
         };
+
+        let reload_for_add = reload_entries.clone();
+        add_btn.connect_clicked(move |btn| {
+            let dlg = PreferencesWindow::builder()
+                .title("Add Startup Application")
+                .modal(true)
+                .default_width(460)
+                .default_height(320)
+                .build();
+            if let Some(root) = btn.root().and_then(|r| r.downcast::<Window>().ok()) {
+                dlg.set_transient_for(Some(&root));
+            }
+
+            let page = PreferencesPage::new();
+            let form_grp = PreferencesGroup::builder()
+                .title("New Autostart Entry")
+                .description("Creates a desktop launcher in ~/.config/autostart/")
+                .build();
+
+            let name_row = EntryRow::builder().title("Application Name").build();
+            let exec_row = EntryRow::builder().title("Command / Executable").build();
+            let comment_row = EntryRow::builder().title("Description (Optional)").build();
+
+            form_grp.add(&name_row);
+            form_grp.add(&exec_row);
+            form_grp.add(&comment_row);
+
+            let save_btn = Button::builder()
+                .label("Save Startup Entry")
+                .css_classes(vec!["suggested-action", "pill"])
+                .halign(Align::End)
+                .margin_top(12)
+                .build();
+            form_grp.add(&save_btn);
+
+            let dlg_clone = dlg.clone();
+            let reload_cb = reload_for_add.clone();
+            save_btn.connect_clicked(move |_| {
+                let name = name_row.text().trim().to_string();
+                let exec = exec_row.text().trim().to_string();
+                let comment = comment_row.text().trim().to_string();
+                if !name.is_empty() && !exec.is_empty() {
+                    if AutostartManager::add_entry(&name, &exec, &comment).is_ok() {
+                        reload_cb();
+                        dlg_clone.close();
+                    }
+                }
+            });
+
+            page.add(&form_grp);
+            dlg.add(&page);
+            dlg.present();
+        });
 
         reload_entries();
 

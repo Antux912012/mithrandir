@@ -61,15 +61,14 @@ impl CleanerPage {
             .build();
         root_box.append(&group);
 
-        let initial_cats = CleanerEngine::get_categories();
+        let initial_cats = CleanerEngine::get_category_definitions();
         let rows_state: Rc<RefCell<Vec<CleanerRowWidgets>>> = Rc::new(RefCell::new(Vec::new()));
 
         for cat in &initial_cats {
-            let title_escaped = cat.name.replace('&', "&amp;");
-            let subtitle_escaped = cat.description.replace('&', "&amp;");
             let row = ActionRow::builder()
-                .title(&title_escaped)
-                .subtitle(&subtitle_escaped)
+                .title(&cat.name)
+                .subtitle(&cat.description)
+                .use_markup(false)
                 .build();
 
             let check = CheckButton::builder()

@@ -40,10 +40,8 @@ impl PreferencesDialog {
 
         let accent_box = GtkBox::builder()
             .orientation(Orientation::Horizontal)
-            .spacing(12)
-            .halign(Align::Center)
-            .margin_top(8)
-            .margin_bottom(8)
+            .spacing(8)
+            .valign(Align::Center)
             .build();
 
         let current_accent = settings.accent_color.clone();
@@ -90,7 +88,13 @@ impl PreferencesDialog {
             accent_box.append(&btn);
         }
 
-        appearance_group.add(&ActionRow::builder().child(&accent_box).build());
+        let accent_row = ActionRow::builder()
+            .title("Accent Color")
+            .subtitle("Primary highlight color for controls and indicators")
+            .use_markup(false)
+            .build();
+        accent_row.add_suffix(&accent_box);
+        appearance_group.add(&accent_row);
         page.add(&appearance_group);
 
         // ---------------------------------------------------------
@@ -162,6 +166,7 @@ impl PreferencesDialog {
                 if caps.vulkan_available { "Available" } else { "Unavailable" },
                 if caps.opengl_available { "Available" } else { "Unavailable" }
             ))
+            .use_markup(false)
             .build();
         caps_row.add_prefix(&Image::from_icon_name("video-display-symbolic"));
         graphics_group.add(&caps_row);
@@ -197,6 +202,7 @@ impl PreferencesDialog {
             let tab_switch = SwitchRow::builder()
                 .title(tab_label)
                 .subtitle(format!("Display {} module tab", tab_label))
+                .use_markup(false)
                 .active(is_visible)
                 .build();
             tab_switch.add_prefix(&Image::from_icon_name(tab_icon));
@@ -295,6 +301,17 @@ impl PreferencesDialog {
             AppSettings::update(|cfg| cfg.ram_threshold = val);
         });
         boost_group.add(&ram_thresh_row);
+
+        let temp_thresh_row = SpinRow::builder()
+            .title("Temporary Clutter Threshold (MB)")
+            .subtitle("Trigger optimization when cleanable temporary files exceed threshold")
+            .adjustment(&gtk4::Adjustment::new(settings.temp_threshold_mb, 250.0, 5000.0, 250.0, 250.0, 0.0))
+            .build();
+        temp_thresh_row.connect_value_notify(|row| {
+            let val = row.value();
+            AppSettings::update(|cfg| cfg.temp_threshold_mb = val);
+        });
+        boost_group.add(&temp_thresh_row);
 
         let cooldown_row = SpinRow::builder()
             .title("Cooldown Interval (minutes)")

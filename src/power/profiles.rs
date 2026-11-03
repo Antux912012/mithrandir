@@ -198,6 +198,25 @@ pub fn set_turbo_boost_at(cpu_dir: &Path, enable: bool) -> Result<(), String> {
 
 // ================= PCIE ASPM =================
 
+pub fn get_current_aspm_policy() -> Option<String> {
+    get_current_aspm_policy_at(Path::new(DEFAULT_PCIE_ASPM_PATH))
+}
+
+pub fn get_current_aspm_policy_at(aspm_path: &Path) -> Option<String> {
+    let content = fs::read_to_string(aspm_path).ok()?;
+    if let (Some(start), Some(end)) = (content.find('['), content.find(']')) {
+        if end > start + 1 {
+            return Some(content[start + 1..end].trim().to_string());
+        }
+    }
+    let trimmed = content.trim();
+    if !trimmed.is_empty() {
+        Some(trimmed.to_string())
+    } else {
+        None
+    }
+}
+
 pub fn set_aspm_policy(policy: &str) -> Result<(), String> {
     set_aspm_policy_at(Path::new(DEFAULT_PCIE_ASPM_PATH), policy)
 }

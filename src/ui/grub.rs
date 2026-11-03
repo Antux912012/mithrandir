@@ -5,7 +5,7 @@ use gtk4::{
 };
 use libadwaita as adw;
 use adw::prelude::*;
-use adw::{ActionRow, Clamp, PreferencesGroup, Toast, ToastOverlay};
+use adw::{ActionRow, ButtonContent, Clamp, ExpanderRow, PreferencesGroup, Toast, ToastOverlay};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -39,12 +39,13 @@ impl GrubPage {
         // ---------------------------------------------------------
         let live_group = PreferencesGroup::builder()
             .title("Live GRUB File Telemetry")
-            .description("Real-time monitoring of host bootloader state and configuration (/etc/default/grub & grub.cfg)")
+            .description("Real-time monitoring of host bootloader state and configuration (/etc/default/grub &amp; grub.cfg)")
             .build();
 
         let default_path_row = ActionRow::builder()
             .title("Master Configuration (/etc/default/grub)")
             .subtitle(format_default_subtitle(&cfg.live_status))
+            .use_markup(false)
             .build();
         default_path_row.add_prefix(&Image::from_icon_name("document-properties-symbolic"));
 
@@ -60,6 +61,7 @@ impl GrubPage {
         let cfg_path_row = ActionRow::builder()
             .title("Bootloader Runtime Output (grub.cfg)")
             .subtitle(format_cfg_subtitle(&cfg.live_status))
+            .use_markup(false)
             .build();
         cfg_path_row.add_prefix(&Image::from_icon_name("application-x-firmware-symbolic"));
         live_group.add(&cfg_path_row);
@@ -70,7 +72,7 @@ impl GrubPage {
         // 2. Backup & Disaster Recovery Group
         // ---------------------------------------------------------
         let backup_group = PreferencesGroup::builder()
-            .title("Configuration Backup & Disaster Recovery")
+            .title("Configuration Backup &amp; Disaster Recovery")
             .description("Create, monitor, and restore original boot configurations")
             .build();
 
@@ -82,6 +84,7 @@ impl GrubPage {
                 cfg.live_status.default_backup_size_bytes,
                 &cfg.live_status.default_backup_modified_time,
             ))
+            .use_markup(false)
             .build();
         default_backup_row.add_prefix(&Image::from_icon_name("document-save-symbolic"));
         backup_group.add(&default_backup_row);
@@ -94,28 +97,33 @@ impl GrubPage {
                 cfg.live_status.backup_size_bytes,
                 &cfg.live_status.backup_modified_time,
             ))
+            .use_markup(false)
             .build();
         cfg_backup_row.add_prefix(&Image::from_icon_name("document-save-symbolic"));
         backup_group.add(&cfg_backup_row);
 
         let backup_actions_box = GtkBox::builder()
             .orientation(Orientation::Horizontal)
-            .spacing(12)
-            .halign(Align::End)
-            .margin_top(8)
-            .margin_bottom(8)
+            .spacing(8)
+            .valign(Align::Center)
             .build();
 
-        let create_bak_btn = Button::builder()
+        let create_bak_content = ButtonContent::builder()
             .label("Create Backups (.bak)")
             .icon_name("document-save-symbolic")
+            .build();
+        let create_bak_btn = Button::builder()
+            .child(&create_bak_content)
             .css_classes(vec!["suggested-action"])
             .valign(Align::Center)
             .build();
 
-        let restore_bak_btn = Button::builder()
+        let restore_bak_content = ButtonContent::builder()
             .label("Restore Configuration")
             .icon_name("edit-undo-symbolic")
+            .build();
+        let restore_bak_btn = Button::builder()
+            .child(&restore_bak_content)
             .css_classes(vec!["destructive-action"])
             .sensitive(cfg.live_status.backup_exists || cfg.live_status.default_backup_exists)
             .valign(Align::Center)
@@ -127,8 +135,10 @@ impl GrubPage {
         let backup_actions_row = ActionRow::builder()
             .title("Disaster Recovery Actions")
             .subtitle("Generate an instant backup or recover the original bootloader state")
-            .child(&backup_actions_box)
+            .use_markup(false)
             .build();
+        backup_actions_row.add_prefix(&Image::from_icon_name("security-high-symbolic"));
+        backup_actions_row.add_suffix(&backup_actions_box);
         backup_group.add(&backup_actions_row);
 
         root_box.append(&backup_group);
@@ -145,6 +155,7 @@ impl GrubPage {
         let timeout_row = ActionRow::builder()
             .title("Boot Menu Timeout (seconds)")
             .subtitle("Seconds before automatically booting default selection (0 = immediate)")
+            .use_markup(false)
             .build();
 
         let timeout_spin = SpinButton::with_range(0.0, 60.0, 1.0);
@@ -157,6 +168,7 @@ impl GrubPage {
         let default_row = ActionRow::builder()
             .title("Default Boot Entry")
             .subtitle("Index (0, 1, ...) or name of the kernel to boot by default")
+            .use_markup(false)
             .build();
 
         let default_entry = Entry::builder()
@@ -167,10 +179,45 @@ impl GrubPage {
         default_row.add_suffix(&default_entry);
         params_group.add(&default_row);
 
+        // Detected Boot Menu Entries Expander
+        let entries_subtitle = if cfg.menu_entries.is_empty() {
+            "No boot menu entries detected in grub.cfg or /boot".to_string()
+        } else {
+            format!("{} boot entry/kernel image(s) detected — expand to select default", cfg.menu_entries.len())
+        };
+        let entries_expander = ExpanderRow::builder()
+            .title("Detected Boot Menu Entries")
+            .subtitle(&entries_subtitle)
+            .use_markup(false)
+            .enable_expansion(!cfg.menu_entries.is_empty())
+            .build();
+        entries_expander.add_prefix(&Image::from_icon_name("view-list-symbolic"));
+
+        for (idx, entry_title) in cfg.menu_entries.iter().enumerate() {
+            let entry_row = ActionRow::builder()
+                .title(&format!("[{}] {}", idx, entry_title))
+                .use_markup(false)
+                .build();
+            let select_btn = Button::builder()
+                .label("Use as Default")
+                .valign(Align::Center)
+                .css_classes(vec!["flat"])
+                .build();
+            let def_entry_clone = default_entry.clone();
+            let idx_str = idx.to_string();
+            select_btn.connect_clicked(move |_| {
+                def_entry_clone.set_text(&idx_str);
+            });
+            entry_row.add_suffix(&select_btn);
+            entries_expander.add_row(&entry_row);
+        }
+        params_group.add(&entries_expander);
+
         // Kernel Boot Parameters row
         let cmdline_row = ActionRow::builder()
             .title("Kernel Boot Parameters")
             .subtitle("Command-line parameters passed to the Linux kernel (GRUB_CMDLINE_LINUX_DEFAULT)")
+            .use_markup(false)
             .build();
 
         let cmdline_entry = Entry::builder()
@@ -193,9 +240,12 @@ impl GrubPage {
             .spacing(12)
             .build();
 
-        let save_btn = Button::builder()
+        let save_content = ButtonContent::builder()
             .label("Save & Update GRUB")
             .icon_name("emblem-default-symbolic")
+            .build();
+        let save_btn = Button::builder()
+            .child(&save_content)
             .css_classes(vec!["suggested-action"])
             .build();
         btn_box.append(&save_btn);
@@ -259,13 +309,14 @@ impl GrubPage {
         // ---------------------------------------------------------
         let (tx_bak, rx_bak) = async_channel::unbounded::<Result<String, String>>();
         let btn_bak_ref = create_bak_btn.clone();
+        let content_bak_ref = create_bak_content.clone();
         let update_live_bak = update_live_status.clone();
         let overlay_bak = toast_overlay_rc.clone();
 
         glib::MainContext::default().spawn_local(async move {
             while let Ok(res) = rx_bak.recv().await {
                 btn_bak_ref.set_sensitive(true);
-                btn_bak_ref.set_label("Create Backups (.bak)");
+                content_bak_ref.set_label("Create Backups (.bak)");
                 update_live_bak();
 
                 match res {
@@ -290,9 +341,10 @@ impl GrubPage {
         });
 
         let btn_bak_click = create_bak_btn.clone();
+        let content_bak_click = create_bak_content.clone();
         create_bak_btn.connect_clicked(move |_| {
             btn_bak_click.set_sensitive(false);
-            btn_bak_click.set_label("Backing up...");
+            content_bak_click.set_label("Backing up...");
             let tx = tx_bak.clone();
             std::thread::spawn(move || {
                 let res = GrubManager::create_backup();
@@ -305,6 +357,7 @@ impl GrubPage {
         // ---------------------------------------------------------
         let (tx_rst, rx_rst) = async_channel::unbounded::<Result<String, String>>();
         let btn_rst_ref = restore_bak_btn.clone();
+        let content_rst_ref = restore_bak_content.clone();
         let update_live_rst = update_live_status.clone();
         let overlay_rst = toast_overlay_rc.clone();
         let spin_rst = timeout_spin.clone();
@@ -314,7 +367,7 @@ impl GrubPage {
         glib::MainContext::default().spawn_local(async move {
             while let Ok(res) = rx_rst.recv().await {
                 btn_rst_ref.set_sensitive(true);
-                btn_rst_ref.set_label("Restore Configuration");
+                content_rst_ref.set_label("Restore Configuration");
                 update_live_rst();
 
                 match res {
@@ -344,9 +397,10 @@ impl GrubPage {
         });
 
         let btn_rst_click = restore_bak_btn.clone();
+        let content_rst_click = restore_bak_content.clone();
         restore_bak_btn.connect_clicked(move |_| {
             btn_rst_click.set_sensitive(false);
-            btn_rst_click.set_label("Restoring...");
+            content_rst_click.set_label("Restoring...");
             let tx = tx_rst.clone();
             std::thread::spawn(move || {
                 let res = GrubManager::restore_backup();
@@ -359,13 +413,14 @@ impl GrubPage {
         // ---------------------------------------------------------
         let (tx_save, rx_save) = async_channel::unbounded::<Result<(), String>>();
         let btn_save_ref = save_btn.clone();
+        let content_save_ref = save_content.clone();
         let update_live_save = update_live_status.clone();
         let overlay_save = toast_overlay_rc.clone();
 
         glib::MainContext::default().spawn_local(async move {
             while let Ok(res) = rx_save.recv().await {
                 btn_save_ref.set_sensitive(true);
-                btn_save_ref.set_label("Save & Update GRUB");
+                content_save_ref.set_label("Save & Update GRUB");
                 update_live_save();
 
                 match res {
@@ -396,13 +451,14 @@ impl GrubPage {
         });
 
         let btn_save_click = save_btn.clone();
+        let content_save_click = save_content.clone();
         let spin_save = timeout_spin.clone();
         let entry_save = default_entry.clone();
         let cmdline_save = cmdline_entry.clone();
 
         save_btn.connect_clicked(move |_| {
             btn_save_click.set_sensitive(false);
-            btn_save_click.set_label("Updating GRUB...");
+            content_save_click.set_label("Updating GRUB...");
             let timeout = spin_save.value() as i32;
             let def = entry_save.text().to_string();
             let cmd = cmdline_save.text().to_string();

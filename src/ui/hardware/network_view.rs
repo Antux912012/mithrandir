@@ -20,8 +20,8 @@ pub fn build_network_view(
 
     for adapter in adapters {
         let net_grp = adw::PreferencesGroup::builder()
-            .title(&format!("Adapter: {}", adapter.interface_name))
-            .description(&adapter.device_type)
+            .title(&format!("Adapter: {}", gtk4::glib::markup_escape_text(&adapter.interface_name)))
+            .description(gtk4::glib::markup_escape_text(&adapter.device_type))
             .build();
 
         let model_row = make_copy_row(
@@ -45,6 +45,7 @@ pub fn build_network_view(
         let up_row = adw::ActionRow::builder()
             .title("Upgrade Compatibility")
             .subtitle(&adapter.upgrade_option)
+            .use_markup(false)
             .build();
         up_row.add_prefix(&gtk4::Image::from_icon_name("starred-symbolic"));
         net_grp.add(&up_row);

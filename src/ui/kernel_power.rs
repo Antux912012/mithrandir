@@ -6,10 +6,10 @@ use adw::{ActionRow, ComboRow, PreferencesGroup, PreferencesPage, SwitchRow, Toa
 use std::rc::Rc;
 use crate::kernel::{bore, scx, detect_kernel};
 use crate::power::{
-    coordinator::{apply_kernel_state_privileged, apply_preset, get_active_preset, PowerPreset},
+    coordinator::{apply_preset, get_active_preset, run_privileged_helper, PowerPreset},
     profiles::{
-        get_available_epp, get_available_governors, get_current_epp, get_current_governor,
-        is_turbo_boost_enabled, is_turbo_boost_supported,
+        get_available_epp, get_available_governors, get_current_aspm_policy, get_current_epp,
+        get_current_governor, is_turbo_boost_enabled, is_turbo_boost_supported,
     },
 };
 
@@ -64,11 +64,14 @@ impl KernelPowerPage {
 
         let active_preset = get_active_preset();
         let toast_overlay_rc = Rc::new(toast_overlay);
+        let preset_btns: Rc< std::cell::RefCell<Vec<(PowerPreset, Button)>> > =
+            Rc::new(std::cell::RefCell::new(Vec::new()));
 
         for (preset, title, subtitle, icon) in presets {
             let row = ActionRow::builder()
                 .title(title)
                 .subtitle(subtitle)
+                .use_markup(false)
                 .activatable(true)
                 .build();
             row.add_prefix(&Image::from_icon_name(icon));
@@ -82,12 +85,25 @@ impl KernelPowerPage {
                 apply_btn.add_css_class("suggested-action");
             }
 
+            preset_btns.borrow_mut().push((preset, apply_btn.clone()));
+
             let toast_rc = toast_overlay_rc.clone();
-            apply_btn.connect_clicked(move |btn| {
+            let all_btns = preset_btns.clone();
+            apply_btn.connect_clicked(move |_| {
                 match apply_preset(preset) {
                     Ok(_) => {
-                        btn.set_label("Active");
-                        btn.add_css_class("suggested-action");
+                        for (p, b) in all_btns.borrow().iter() {
+                            if *p == preset {
+                                b.set_label("Active");
+                                b.add_css_class("suggested-action");
+                            } else {
+                                b.set_label("Apply");
+                                b.remove_css_class("suggested-action");
+                            }
+                        }
+                        let is_battery = preset == PowerPreset::Battery;
+                        crate::tray::sync_tray_power_saver(is_battery);
+                        crate::ui::DashboardPage::update_ui_power_saver(is_battery);
                         if let Some(ref overlay) = *toast_rc {
                             overlay.add_toast(Toast::new(&format!("Applied {} preset successfully", preset.name())));
                         }
@@ -144,7 +160,9 @@ impl KernelPowerPage {
         bore_switch.connect_active_notify(move |row| {
             let active = row.is_active();
             if bore::is_bore_supported() {
-                match bore::set_bore_state(active) {
+                let res = bore::set_bore_state(active)
+                    .or_else(|_| run_privileged_helper(Some(active), None, None, None, None, false));
+                match res {
                     Ok(_) => {
                         let _ = bore::persist_bore_state(active);
                         if let Some(ref overlay) = *toast_rc_bore {
@@ -246,7 +264,9 @@ impl KernelPowerPage {
             let idx = row.selected() as usize;
             if idx < govs_list.len() {
                 let gov = &govs_list[idx];
-                match crate::power::profiles::set_governor(gov) {
+                let res = crate::power::profiles::set_governor(gov)
+                    .or_else(|_| run_privileged_helper(None, Some(gov), None, None, None, false));
+                match res {
                     Ok(_) => {
                         if let Some(ref overlay) = *toast_rc_gov {
                             overlay.add_toast(Toast::new(&format!("Set CPU governor to {}", gov)));
@@ -290,7 +310,9 @@ impl KernelPowerPage {
             let idx = row.selected() as usize;
             if idx < epp_list.len() {
                 let epp = &epp_list[idx];
-                match crate::power::profiles::set_epp(epp) {
+                let res = crate::power::profiles::set_epp(epp)
+                    .or_else(|_| run_privileged_helper(None, None, Some(epp), None, None, false));
+                match res {
                     Ok(_) => {
                         if let Some(ref overlay) = *toast_rc_epp {
                             overlay.add_toast(Toast::new(&format!("Set EPP to {}", epp)));
@@ -324,7 +346,9 @@ impl KernelPowerPage {
         let toast_rc_turbo = toast_overlay_rc.clone();
         turbo_switch.connect_active_notify(move |row| {
             let active = row.is_active();
-            match crate::power::profiles::set_turbo_boost(active) {
+            let res = crate::power::profiles::set_turbo_boost(active)
+                .or_else(|_| run_privileged_helper(None, None, None, Some(active), None, false));
+            match res {
                 Ok(_) => {
                     if let Some(ref overlay) = *toast_rc_turbo {
                         overlay.add_toast(Toast::new(if active {
@@ -354,12 +378,14 @@ impl KernelPowerPage {
             .build();
 
         let aspm_policies = ["default", "performance", "powersave", "powersupersave"];
+        let cur_aspm = get_current_aspm_policy().unwrap_or_else(|| "default".to_string());
+        let cur_aspm_idx = aspm_policies.iter().position(|p| *p == cur_aspm).unwrap_or(0) as u32;
         let aspm_model = StringList::new(&aspm_policies);
         let aspm_row = ComboRow::builder()
             .title("PCIe ASPM Link State Power Policy")
             .subtitle("Controls power state transitions on PCIe buses, GPUs, NVMe, and network cards")
             .model(&aspm_model)
-            .selected(0)
+            .selected(cur_aspm_idx)
             .build();
         aspm_row.add_prefix(&Image::from_icon_name("drive-harddisk-symbolic"));
 
@@ -368,7 +394,9 @@ impl KernelPowerPage {
             let idx = row.selected() as usize;
             if idx < aspm_policies.len() {
                 let policy = aspm_policies[idx];
-                match crate::power::profiles::set_aspm_policy(policy) {
+                let res = crate::power::profiles::set_aspm_policy(policy)
+                    .or_else(|_| run_privileged_helper(None, None, None, None, Some(policy), false));
+                match res {
                     Ok(_) => {
                         if let Some(ref overlay) = *toast_rc_aspm {
                             overlay.add_toast(Toast::new(&format!("Set PCIe ASPM policy to {}", policy)));
@@ -413,7 +441,7 @@ impl KernelPowerPage {
             let a_idx = aspm_row_clone.selected() as usize;
             let a_val = aspm_policies.get(a_idx).map(|s| s.to_string());
 
-            match apply_kernel_state_privileged(
+            match run_privileged_helper(
                 Some(b_val),
                 g_val.as_deref(),
                 e_val.as_deref(),

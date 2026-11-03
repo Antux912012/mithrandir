@@ -11,6 +11,7 @@ pub fn make_copy_row(
     let row = adw::ActionRow::builder()
         .title(title)
         .subtitle(subtitle)
+        .use_markup(false)
         .build();
 
     if let Some(icon) = icon_name {
@@ -50,15 +51,19 @@ pub fn make_search_action_row(
     let row = adw::ActionRow::builder()
         .title(title)
         .subtitle(search_query)
+        .use_markup(false)
         .build();
 
     let img = gtk4::Image::from_icon_name("system-search-symbolic");
     img.add_css_class("accent");
     row.add_prefix(&img);
 
-    let copy_btn = gtk4::Button::builder()
+    let btn_content = adw::ButtonContent::builder()
         .label("Copy Search Query")
         .icon_name("edit-copy-symbolic")
+        .build();
+    let copy_btn = gtk4::Button::builder()
+        .child(&btn_content)
         .valign(gtk4::Align::Center)
         .css_classes(["suggested-action"])
         .tooltip_text("Copy search query for online marketplaces")
