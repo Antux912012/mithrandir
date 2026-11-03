@@ -22,24 +22,18 @@ pub struct KernelPowerPage;
 
 impl KernelPowerPage {
     fn format_scx_status_subtitle(kinfo: &KernelInfo) -> String {
-        let sysfs_state = scx::get_sysfs_scheduler_state().unwrap_or_else(|| {
-            if kinfo.scx_supported {
-                "disabled".to_string()
-            } else {
-                "unsupported by running kernel".to_string()
-            }
-        });
+        let kernel_diag = scx::get_kernel_scx_diagnostic();
         let count = kinfo.supported_scx_schedulers.len();
         let plan = scx::get_install_plan();
         if count == 0 {
             format!(
-                "Kernel state: {} • No scx_* binaries found • Ready to install via {}",
-                sysfs_state, plan.summary
+                "{} • No scx_* binaries found • Ready to install ({})",
+                kernel_diag, plan.summary
             )
         } else {
             format!(
-                "Kernel state: {} • Active ops: {} • {} scx_* schedulers installed ({})",
-                sysfs_state,
+                "{} • Selected/Active: {} • {} scx_* schedulers installed ({})",
+                kernel_diag,
                 kinfo.scx_active_scheduler,
                 count,
                 kinfo.supported_scx_schedulers.join(", ")
@@ -219,7 +213,7 @@ impl KernelPowerPage {
             .use_markup(false)
             .model(&scx_model)
             .selected(current_scx_idx)
-            .sensitive(kinfo.scx_supported && !kinfo.supported_scx_schedulers.is_empty())
+            .sensitive(!kinfo.supported_scx_schedulers.is_empty())
             .build();
         scx_row.add_prefix(&Image::from_icon_name("system-run-symbolic"));
         sched_group.add(&scx_row);
@@ -235,7 +229,7 @@ impl KernelPowerPage {
             .use_markup(false)
             .model(&mode_model)
             .selected(initial_mode_idx)
-            .sensitive(kinfo.scx_supported && !kinfo.supported_scx_schedulers.is_empty())
+            .sensitive(!kinfo.supported_scx_schedulers.is_empty())
             .build();
         scx_mode_row.add_prefix(&Image::from_icon_name("speedometer-symbolic"));
         
@@ -321,10 +315,7 @@ impl KernelPowerPage {
                         Ok(_) => {
                             let mode_label = scx::ScxMode::from_u32(mode_val).label();
                             if let Some(ref overlay) = *toast_rc_scx {
-                                overlay.add_toast(Toast::new(&format!(
-                                    "Switched scheduler to {} ({})",
-                                    chosen, mode_label
-                                )));
+                                overlay.add_toast(Toast::new(&if scx::is_scx_supported() { format!("Switched live scheduler to {} ({})", chosen, mode_label) } else { format!("Configured {} ({}) for next boot into SCX kernel", chosen, mode_label) }));
                             }
                         }
                         Err(e) => {
@@ -409,8 +400,7 @@ impl KernelPowerPage {
                     .unwrap_or(0) as u32;
                 scx_row.set_selected(idx);
                 scx_row.set_subtitle(scx::scheduler_description(&latest.scx_active_scheduler));
-                let can_use_scx =
-                    latest.scx_supported && !latest.supported_scx_schedulers.is_empty();
+                let can_use_scx = !latest.supported_scx_schedulers.is_empty();
                 scx_row.set_sensitive(can_use_scx);
                 scx_mode_row.set_sensitive(can_use_scx);
                 scx_mode_row.set_selected((latest.scx_mode as usize).min(4) as u32);

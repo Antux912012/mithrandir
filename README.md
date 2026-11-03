@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.1.0-brightgreen.svg" alt="Version" /></a>
+  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.1.1-brightgreen.svg" alt="Version" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later" /></a>
   <a href="https://gtk.org/"><img src="https://img.shields.io/badge/GUI-GTK%204%20%7C%20Libadwaita-brightgreen.svg" alt="GTK4 & Libadwaita" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.80%2B-informational.svg" alt="Rust 1.80+" /></a>
@@ -22,7 +22,7 @@
 **Mithrandir** is a blazing-fast, native system optimizer, deep cleaner, telemetry monitor, CachyOS kernel scheduler manager, and hardware power optimizer written in **Rust** with **GTK4** and **Libadwaita**, engineered for instant startup, minimal memory footprint, and robust multi-distribution compatibility.
 
 > [!NOTE]
-> **What's New in v1.0.0:**
+> **What's New in v1.1.1:**
 > - 🚀 **Unified Architecture**: Rust workspace consolidating all features into a single high-performance binary.
 > - 🧹 **Hardened Flatpak Cache Safety**: Strict XDG sandbox boundary validation ensuring `config/`, `data/`, and `.local/state/` are never touched.
 > - 🧠 **CachyOS Schedulers**: Full runtime and persistent control for BORE (`sched_bore`) and `sched-ext` (SCX BPF schedulers) via system D-Bus.
@@ -91,6 +91,23 @@ Mithrandir includes hardware-level battery and power saving controls synced acro
 - **Zero-Password Udev Optimization**: Generates `99-mithrandir-power.rules` dynamically targeting the correct administrative group (`wheel` for Fedora/Arch/openSUSE, `sudo` for Debian/Ubuntu).
 - **SELinux & Immutability Awareness**: Native `/etc/os-release` detection (`src/os_info.rs`) automatically recognizes NixOS and immutable trees, gracefully skipping direct `/etc` modifications with clear user guidance.
 
+### 🔄 Pluggable `sched-ext` (SCX v1.1.4) BPF CPU Schedulers
+
+Mithrandir bundles and distributes precompiled **`sched-ext` (`scx` v1.1.4)** userspace BPF CPU schedulers (`scx_bpfland`, `scx_lavd`, `scx_flash`, `scx_rusty`, `scx_cosmos`, `scx_p2dq`, `scx_beerland`, `scx_rustland`, `scx_layered`, `scx_tickless`, `scx_cake`, `scx_eevdf`, `scx_mitosis`, `scx_rlfifo`, and `scxctl`):
+
+- **3-Stage Hybrid Installation** (GUI **"Install SCX"** button in *Kernel & Power* or `mithrandir --install-scx`):
+  1. **Embedded Binary Bundle (`scx-scheds-1.1.4-x86_64.tar.xz`)**: Instantly installs all 14 precompiled `scx_*` binaries + `scxctl` + `scx.service` offline directly from Mithrandir's package.
+  2. **GitHub Releases `.deb` / `.rpm` / `.tar.xz`**: Downloads and installs `scx-scheds_1.1.4_amd64.deb` (Debian/Ubuntu) or `scx-scheds-1.1.4-1.x86_64.rpm` (Fedora/openSUSE) from Mithrandir Releases.
+  3. **Automated Cargo Source Build Fallback**: Clones `https://github.com/sched-ext/scx.git` (`v1.1.4`) and compiles with `cargo build --profile=release-tiny`.
+- **Standalone SCX Package Builder**:
+  ```bash
+  ./packaging/build_scx_packages.sh
+  # Outputs in dist/scx/:
+  #   - scx-scheds_1.1.4_amd64.deb
+  #   - scx-scheds-1.1.4-1.x86_64.rpm
+  #   - scx-scheds-1.1.4-x86_64.tar.xz
+  ```
+
 ---
 
 ## 📦 Installation
@@ -100,14 +117,14 @@ Pre-built standalone packages are ready in the repository root:
 ### AppImage (`.AppImage`)
 Run instantly on any modern GNU/Linux distribution:
 ```bash
-chmod +x ./mithrandir-1.0.1-x86_64.AppImage
-./mithrandir-1.0.1-x86_64.AppImage
+chmod +x ./mithrandir-1.1.1-x86_64.AppImage
+./mithrandir-1.1.1-x86_64.AppImage
 ```
 
 ### Flatpak Bundle (`.flatpak`)
 Install the sandboxed single-file bundle:
 ```bash
-flatpak install --user mithrandir_1.0.1.flatpak
+flatpak install --user mithrandir_1.1.1.flatpak
 ```
 Run via Flatpak:
 ```bash
@@ -140,6 +157,12 @@ mithrandir --smart-boost
 
 # View live system telemetry
 mithrandir --monitor
+
+# Inspect CachyOS BORE & sched-ext (SCX) kernel status
+mithrandir --kernel
+
+# Install or update sched-ext (SCX v1.1.4) BPF schedulers
+mithrandir --install-scx
 
 # Scan cleanable clutter and caches
 mithrandir --clean

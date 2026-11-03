@@ -37,6 +37,10 @@ install -m 644 "${ROOT_DIR}/data/${APP_ID}.gschema.xml" "${BUILD_DIR}/files/shar
 install -m 644 "${ROOT_DIR}/data/${APP_ID}.metainfo.xml" "${BUILD_DIR}/files/share/metainfo/${APP_ID}.metainfo.xml"
 install -m 644 "${ROOT_DIR}/data/${APP_ID}.metainfo.xml" "${BUILD_DIR}/files/share/appdata/${APP_ID}.appdata.xml"
 cp -r "${ROOT_DIR}/data/icons/hicolor/"* "${BUILD_DIR}/files/share/icons/hicolor/"
+if [[ -d "${ROOT_DIR}/data/scx" ]]; then
+  mkdir -p "${BUILD_DIR}/files/share/mithrandir/scx"
+  cp -f "${ROOT_DIR}/data/scx/"* "${BUILD_DIR}/files/share/mithrandir/scx/"
+fi
 
 # Stage screenshots for Software Center and offline media caches
 if [[ -d "${ROOT_DIR}/data/screenshots" ]]; then

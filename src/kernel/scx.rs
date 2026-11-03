@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use zbus::blocking::Connection;
 
@@ -13,7 +13,11 @@ pub const SCX_DBUS_DEST: &str = "org.scx.Loader";
 pub const SCX_DBUS_PATH: &str = "/org/scx/Loader";
 pub const SCX_DBUS_INTERFACE: &str = "org.scx.Loader";
 
-/// Complete list of official sched-ext (`scx`) userspace/BPF schedulers from https://github.com/sched-ext/scx
+pub const SCX_BUNDLE_VERSION: &str = "1.1.4";
+pub const MITHRANDIR_GITHUB_RELEASE_BASE: &str =
+    "https://github.com/Antux912012/mithrandir/releases/latest/download";
+
+/// Complete list of official sched-ext (`scx` v1.1.4) userspace/BPF schedulers from https://github.com/sched-ext/scx
 pub const KNOWN_SCX_SCHEDULERS: &[&str] = &[
     "scx_bpfland",
     "scx_lavd",
@@ -24,12 +28,15 @@ pub const KNOWN_SCX_SCHEDULERS: &[&str] = &[
     "scx_beerland",
     "scx_rustland",
     "scx_layered",
+    "scx_tickless",
+    "scx_cake",
+    "scx_eevdf",
+    "scx_mitosis",
+    "scx_rlfifo",
     "scx_simple",
     "scx_central",
     "scx_nest",
     "scx_qmap",
-    "scx_rlfifo",
-    "scx_tickless",
     "scx_flatcg",
     "scx_userland",
 ];
@@ -126,12 +133,15 @@ pub fn scheduler_description(name: &str) -> &'static str {
         "scx_beerland" => "Cache-locality & throughput oriented BPF scheduler related to bpfland",
         "scx_rustland" => "Userspace Rust scheduler prioritizing interactive tasks over heavy background load",
         "scx_layered" => "Configurable multi-layer BPF scheduler for fine-grained workload isolation",
+        "scx_tickless" => "Tickless scheduler routing timer ticks to a dedicated housekeeping CPU pool",
+        "scx_cake" => "CAKE-inspired low-latency fair queueing BPF CPU scheduler for gaming & desktop",
+        "scx_eevdf" => "BPF implementation of Earliest Eligible Virtual Deadline First scheduling",
+        "scx_mitosis" => "Dynamic cell-partitioning BPF scheduler for multi-core & cgroup isolation",
+        "scx_rlfifo" => "Simple Rust userland FIFO scheduler built on the scx_rlfifo framework",
         "scx_simple" => "Minimal vtime/FIFO reference BPF scheduler from upstream sched-ext",
         "scx_central" => "Central dispatcher tickless scheduler minimizing timer interrupt overhead",
         "scx_nest" => "Core-nesting scheduler keeping active cores warm for frequency boost gains",
         "scx_qmap" => "Queued BPF map reference scheduler with multi-level priority queues",
-        "scx_rlfifo" => "Simple Rust userland FIFO scheduler built on the scx_rlfifo framework",
-        "scx_tickless" => "Tickless scheduler routing timer ticks to a dedicated housekeeping CPU pool",
         "scx_flatcg" => "Flattened cgroup hierarchy BPF scheduler for high-density container workloads",
         "scx_userland" => "Minimal userspace C ordered-list reference scheduler",
         _ => "Pluggable sched-ext (SCX) BPF kernel scheduler",
@@ -139,14 +149,16 @@ pub fn scheduler_description(name: &str) -> &'static str {
 }
 
 /// Normalizes a raw scheduler name from `/sys/kernel/sched_ext/root/ops` or D-Bus
-/// (e.g., `"bpfland"` or `"bpfland_1.0.8_g..."`) into its canonical binary name (`"scx_bpfland"`).
+/// (e.g., `"bpfland"` or `"bpfland_1.1.4_g..."`) into its canonical binary name (`"scx_bpfland"`).
 pub fn normalize_scheduler_name(raw: &str) -> String {
     let trimmed = raw.trim();
-    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("none") || trimmed.eq_ignore_ascii_case("unknown") {
+    if trimmed.is_empty()
+        || trimmed.eq_ignore_ascii_case("none")
+        || trimmed.eq_ignore_ascii_case("unknown")
+    {
         return "none".to_string();
     }
 
-    // Direct match against known schedulers
     for &known in KNOWN_SCX_SCHEDULERS {
         let short = known.trim_start_matches("scx_");
         if trimmed == known
@@ -200,7 +212,40 @@ pub fn get_sysfs_active_scheduler_at(ops_path: &Path) -> String {
     "none".to_string()
 }
 
-/// Queries the active scheduler via `org.scx.Loader` D-Bus, falling back to normalized sysfs `ops`.
+/// Inspects `/boot/config-*` to provide a helpful diagnostic if the currently running kernel lacks `CONFIG_SCHED_CLASS_EXT=y`.
+pub fn get_kernel_scx_diagnostic() -> String {
+    if is_scx_supported() {
+        let state = get_sysfs_scheduler_state().unwrap_or_else(|| "disabled".to_string());
+        return format!("Kernel sched_ext active ({})", state);
+    }
+
+    // Check if another installed kernel in /boot has CONFIG_SCHED_CLASS_EXT=y
+    let mut scx_kernels = Vec::new();
+    if let Ok(entries) = fs::read_dir("/boot") {
+        for entry in entries.flatten() {
+            let fname = entry.file_name().to_string_lossy().to_string();
+            if let Some(kver) = fname.strip_prefix("config-") {
+                if let Ok(cfg) = fs::read_to_string(entry.path()) {
+                    if cfg.lines().any(|l| l.trim() == "CONFIG_SCHED_CLASS_EXT=y") {
+                        scx_kernels.push(kver.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    if !scx_kernels.is_empty() {
+        scx_kernels.sort();
+        format!(
+            "Current kernel lacks CONFIG_SCHED_CLASS_EXT=y (available in /boot: {})",
+            scx_kernels.join(", ")
+        )
+    } else {
+        "Current kernel compiled without CONFIG_SCHED_CLASS_EXT=y (enable in CachyOS Kernel Updater)".to_string()
+    }
+}
+
+/// Queries the active scheduler via `org.scx.Loader` D-Bus, falling back to normalized sysfs `ops` or `/etc/default/scx`.
 pub fn get_active_scheduler() -> String {
     if let Ok(conn) = Connection::system() {
         if let Ok(proxy) = zbus::blocking::Proxy::new(
@@ -218,14 +263,33 @@ pub fn get_active_scheduler() -> String {
         }
     }
 
-    // If sysfs state is explicitly disabled, no SCX scheduler is active
     if let Some(state) = get_sysfs_scheduler_state() {
         if state == "disabled" {
             return "none".to_string();
         }
     }
 
-    normalize_scheduler_name(&get_sysfs_active_scheduler())
+    let sysfs_sched = normalize_scheduler_name(&get_sysfs_active_scheduler());
+    if sysfs_sched != "none" {
+        return sysfs_sched;
+    }
+
+    // If kernel doesn't have sched_ext active right now, check configured default in /etc/default/scx
+    if !is_scx_supported() {
+        if let Ok(content) = fs::read_to_string("/etc/default/scx") {
+            for line in content.lines() {
+                if let Some(val) = line.trim().strip_prefix("SCX_SCHEDULER=") {
+                    let clean = val.trim_matches('"').trim_matches('\'').trim();
+                    let norm = normalize_scheduler_name(clean);
+                    if norm != "none" {
+                        return norm;
+                    }
+                }
+            }
+        }
+    }
+
+    "none".to_string()
 }
 
 /// Retrieves scheduler mode and list of supported schedulers installed on the system.
@@ -255,7 +319,6 @@ pub fn get_scx_info() -> (u32, Vec<String>) {
         }
     }
 
-    // Also discover all available scx_* binaries on the host (including /usr/sbin for Ubuntu/Debian)
     for discovered in discover_installed_schedulers() {
         if !scheds.contains(&discovered) {
             scheds.push(discovered);
@@ -343,6 +406,7 @@ fn is_valid_scheduler_identifier(name: &str) -> bool {
 /// 1. `org.scx.Loader` D-Bus service
 /// 2. `scxctl` CLI via `HostBridge`
 /// 3. Direct privileged execution of the `scx_*` daemon binary on the host
+/// If the running kernel does not currently expose `/sys/kernel/sched_ext`, persists the choice to `/etc/default/scx` and `/etc/scx_loader/config.toml` for the next boot into an SCX-enabled kernel.
 pub fn switch_scheduler(scheduler: &str, mode: u32) -> Result<(), String> {
     let normalized = normalize_scheduler_name(scheduler);
     if normalized == "none" {
@@ -354,6 +418,12 @@ pub fn switch_scheduler(scheduler: &str, mode: u32) -> Result<(), String> {
 
     let scx_mode = ScxMode::from_u32(mode);
     LAST_SCX_MODE.store(scx_mode.as_u32(), Ordering::SeqCst);
+
+    // If the currently running kernel lacks CONFIG_SCHED_CLASS_EXT=y, save configuration for next boot
+    if !is_scx_supported() {
+        set_scx_boot_persistence(&normalized, scx_mode)?;
+        return Ok(());
+    }
 
     // 1. Try org.scx.Loader D-Bus interface
     if let Ok(conn) = Connection::system() {
@@ -371,7 +441,7 @@ pub fn switch_scheduler(scheduler: &str, mode: u32) -> Result<(), String> {
         }
     }
 
-    // 2. Try scxctl command line via HostBridge (handles both modern `--sched` and positional syntax)
+    // 2. Try scxctl command line via HostBridge
     if which_binary("scxctl") {
         let short_name = normalized.trim_start_matches("scx_");
         let mode_str = scx_mode.cli_name();
@@ -382,12 +452,6 @@ pub fn switch_scheduler(scheduler: &str, mode: u32) -> Result<(), String> {
         }
         if let Ok((0, _, _)) =
             HostBridge::run_command("scxctl", &["start", "--sched", short_name, "--mode", mode_str])
-        {
-            return Ok(());
-        }
-        let mode_num = mode.to_string();
-        if let Ok((0, _, _)) =
-            HostBridge::run_command("scxctl", &["switch", &normalized, "--mode", &mode_num])
         {
             return Ok(());
         }
@@ -441,13 +505,18 @@ pub fn switch_scheduler(scheduler: &str, mode: u32) -> Result<(), String> {
     }
 
     Err(format!(
-        "Scheduler '{}' is not installed on this system. Use 'Install / Update SCX' to install sched-ext.",
+        "Scheduler '{}' is not installed on this system. Click 'Install SCX' to install sched-ext.",
         normalized
     ))
 }
 
 /// Stops active SCX scheduler and reverts to default kernel scheduler (BORE / EEVDF).
 pub fn stop_scheduler() -> Result<(), String> {
+    if !is_scx_supported() {
+        let _ = set_scx_boot_persistence("none", ScxMode::Auto);
+        return Ok(());
+    }
+
     // 1. Try D-Bus interface
     if let Ok(conn) = Connection::system() {
         if let Ok(proxy) = zbus::blocking::Proxy::new(
@@ -470,7 +539,6 @@ pub fn stop_scheduler() -> Result<(), String> {
         }
     }
 
-    // If already stopped, return Ok immediately
     if get_active_scheduler() == "none" {
         return Ok(());
     }
@@ -496,7 +564,7 @@ pub fn set_scx_boot_persistence(scheduler: &str, mode: ScxMode) -> Result<(), St
 
     let flags = mode.flags_for_scheduler(&normalized).join(" ");
     let script = if normalized == "none" {
-        "rm -f /etc/scx_loader/config.toml 2>/dev/null || true; \
+        "rm -f /etc/scx_loader/config.toml /etc/default/scx 2>/dev/null || true; \
          systemctl disable scx_loader.service scx.service 2>/dev/null || true"
             .to_string()
     } else {
@@ -504,7 +572,7 @@ pub fn set_scx_boot_persistence(scheduler: &str, mode: ScxMode) -> Result<(), St
             "mkdir -p /etc/scx_loader /etc/default && \
              printf '# Generated by Mithrandir Kernel & Power Manager\\ndefault_sched = \"{sched}\"\\ndefault_mode = {mode_str}\\n' > /etc/scx_loader/config.toml && \
              printf '# Generated by Mithrandir Kernel & Power Manager\\nSCX_SCHEDULER={sched}\\nSCX_FLAGS=\"{flags}\"\\n' > /etc/default/scx && \
-             (systemctl enable scx_loader.service 2>/dev/null || systemctl enable scx.service 2>/dev/null || true)",
+             (systemctl enable scx.service 2>/dev/null || systemctl enable scx_loader.service 2>/dev/null || true)",
             sched = normalized,
             mode_str = match mode {
                 ScxMode::Auto => "\"Auto\"",
@@ -525,6 +593,42 @@ pub fn set_scx_boot_persistence(scheduler: &str, mode: ScxMode) -> Result<(), St
     }
 }
 
+/// Locates the bundled precompiled `scx-scheds-1.1.4-x86_64.tar.xz` archive if present inside Mithrandir's package.
+pub fn find_bundled_scx_archive() -> Option<PathBuf> {
+    let archive_name = format!("scx-scheds-{}-x86_64.tar.xz", SCX_BUNDLE_VERSION);
+    let mut candidates = vec![
+        PathBuf::from(format!("/usr/share/mithrandir/scx/{}", archive_name)),
+        PathBuf::from(format!("/usr/local/share/mithrandir/scx/{}", archive_name)),
+        PathBuf::from(format!("/app/share/mithrandir/scx/{}", archive_name)),
+        PathBuf::from(format!("data/scx/{}", archive_name)),
+        PathBuf::from(format!("dist/scx/{}", archive_name)),
+    ];
+
+    if let Ok(appdir) = std::env::var("APPDIR") {
+        candidates.insert(
+            0,
+            Path::new(&appdir)
+                .join("usr/share/mithrandir/scx")
+                .join(&archive_name),
+        );
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(bin_dir) = exe.parent() {
+            candidates.insert(
+                0,
+                bin_dir
+                    .join("../share/mithrandir/scx")
+                    .join(&archive_name),
+            );
+            candidates.insert(0, bin_dir.join("../data/scx").join(&archive_name));
+            candidates.insert(0, bin_dir.join("../../data/scx").join(&archive_name));
+        }
+    }
+
+    candidates.into_iter().find(|p| p.is_file())
+}
+
 #[derive(Debug, Clone)]
 pub struct ScxInstallPlan {
     pub distro_name: String,
@@ -533,7 +637,10 @@ pub struct ScxInstallPlan {
     pub requires_reboot_for_kernel: bool,
 }
 
-/// Generates a distro-aware installation plan for `sched-ext` (`scx`) based on https://github.com/sched-ext/scx/blob/main/INSTALL.md
+/// Generates a 3-stage hybrid installation plan for `sched-ext` (`scx` v1.1.4):
+/// 1. Embedded precompiled `scx-scheds-1.1.4-x86_64.tar.xz` bundle (instant offline install)
+/// 2. Mithrandir GitHub Releases precompiled `.deb` / `.rpm` / `.tar.xz` package download
+/// 3. Upstream Cargo source build (`https://github.com/sched-ext/scx.git` `--profile=release-tiny`)
 pub fn get_install_plan() -> ScxInstallPlan {
     let os = detect_os();
     get_install_plan_for_distro(os.distro, &os.pretty_name, is_scx_supported())
@@ -544,98 +651,234 @@ pub fn get_install_plan_for_distro(
     pretty_name: &str,
     scx_kernel_supported: bool,
 ) -> ScxInstallPlan {
+    let deb_url = format!(
+        "{}/scx-scheds_{}_amd64.deb",
+        MITHRANDIR_GITHUB_RELEASE_BASE, SCX_BUNDLE_VERSION
+    );
+    let rpm_url = format!(
+        "{}/scx-scheds-{}-1.x86_64.rpm",
+        MITHRANDIR_GITHUB_RELEASE_BASE, SCX_BUNDLE_VERSION
+    );
+    let tar_url = format!(
+        "{}/scx-scheds-{}-x86_64.tar.xz",
+        MITHRANDIR_GITHUB_RELEASE_BASE, SCX_BUNDLE_VERSION
+    );
+
+    let cargo_source_fallback = format!(
+        "rm -rf /tmp/mithrandir-scx-src && \
+         git clone --branch v{ver} --depth 1 https://github.com/sched-ext/scx.git /tmp/mithrandir-scx-src && \
+         cd /tmp/mithrandir-scx-src && \
+         cargo build --profile=release-tiny -p scx_bpfland -p scx_lavd -p scx_flash -p scx_rusty -p scx_cosmos -p scx_p2dq -p scx_beerland -p scx_rustland -p scx_layered -p scx_tickless -p scx_cake -p scx_eevdf -p scx_mitosis -p scx_rlfifo && \
+         install -m 0755 target/release-tiny/scx_* /usr/bin/ && \
+         rm -rf /tmp/mithrandir-scx-src",
+        ver = SCX_BUNDLE_VERSION
+    );
+
     match distro {
         LinuxDistro::Ubuntu => {
-            let pkg_list = if scx_kernel_supported {
-                "scx"
+            let pkg_extra = if scx_kernel_supported {
+                ""
             } else {
-                "scx linux-generic-wip"
+                "apt-get install -y linux-generic-wip 2>/dev/null || true; "
             };
             ScxInstallPlan {
                 distro_name: pretty_name.to_string(),
                 summary: format!(
-                    "Ubuntu PPA (ppa:arighi/sched-ext) — installs {}",
-                    pkg_list
+                    "Precompiled scx-scheds v{} (.deb / bundle) + ppa:arighi/sched-ext fallback",
+                    SCX_BUNDLE_VERSION
                 ),
                 command: format!(
                     "export DEBIAN_FRONTEND=noninteractive; \
-                     apt-get update && \
-                     apt-get install -y software-properties-common && \
-                     add-apt-repository -y --enable-source ppa:arighi/sched-ext && \
-                     apt-get update && \
-                     (apt-get install -y {} || apt-get install -y scx)",
-                    pkg_list
+                     if [ -n \"$MITHRANDIR_SCX_BUNDLE\" ] && [ -f \"$MITHRANDIR_SCX_BUNDLE\" ]; then \
+                         echo '==> Extracting bundled precompiled sched-ext v{ver} binaries...'; \
+                         tar -C / -xJf \"$MITHRANDIR_SCX_BUNDLE\" && systemctl daemon-reload 2>/dev/null || true; \
+                     elif curl -fsSL \"{deb_url}\" -o /tmp/scx-scheds.deb; then \
+                         echo '==> Installing scx-scheds_{ver}_amd64.deb from Mithrandir GitHub Release...'; \
+                         dpkg -i /tmp/scx-scheds.deb || apt-get install -f -y; \
+                         rm -f /tmp/scx-scheds.deb; \
+                     else \
+                         apt-get update && apt-get install -y software-properties-common && \
+                         add-apt-repository -y --enable-source ppa:arighi/sched-ext && \
+                         apt-get update && (apt-get install -y scx || ({cargo_fb})); \
+                     fi; \
+                     {pkg_extra}",
+                    ver = SCX_BUNDLE_VERSION,
+                    deb_url = deb_url,
+                    cargo_fb = cargo_source_fallback,
+                    pkg_extra = pkg_extra
                 ),
                 requires_reboot_for_kernel: !scx_kernel_supported,
             }
         }
         LinuxDistro::Debian => ScxInstallPlan {
             distro_name: pretty_name.to_string(),
-            summary: "APT scx package (with automated upstream github.com/sched-ext/scx build fallback)".to_string(),
-            command: "export DEBIAN_FRONTEND=noninteractive; \
-                      apt-get update && \
-                      (apt-get install -y scx || (\
-                          apt-get install -y git build-essential meson ninja-build pkg-config clang llvm libbpf-dev libelf-dev libzstd-dev zlib1g-dev protobuf-compiler libseccomp-dev cargo rustc && \
-                          rm -rf /tmp/mithrandir-scx-build && \
-                          git clone --depth 1 https://github.com/sched-ext/scx.git /tmp/mithrandir-scx-build && \
-                          cd /tmp/mithrandir-scx-build && \
-                          meson setup build --prefix=/usr && \
-                          ninja -C build && \
-                          ninja -C build install && \
-                          rm -rf /tmp/mithrandir-scx-build\
-                      ))"
-                .to_string(),
+            summary: format!(
+                "Precompiled scx-scheds_{}_amd64.deb (Mithrandir bundle / GitHub Release + Cargo source fallback)",
+                SCX_BUNDLE_VERSION
+            ),
+            command: format!(
+                "export DEBIAN_FRONTEND=noninteractive; \
+                 if [ -n \"$MITHRANDIR_SCX_BUNDLE\" ] && [ -f \"$MITHRANDIR_SCX_BUNDLE\" ]; then \
+                     echo '==> Extracting bundled precompiled sched-ext v{ver} binaries...'; \
+                     tar -C / -xJf \"$MITHRANDIR_SCX_BUNDLE\" && systemctl daemon-reload 2>/dev/null || true; \
+                 elif curl -fsSL \"{deb_url}\" -o /tmp/scx-scheds.deb; then \
+                     echo '==> Installing scx-scheds_{ver}_amd64.deb from Mithrandir GitHub Release...'; \
+                     dpkg -i /tmp/scx-scheds.deb || (apt-get update && apt-get install -f -y); \
+                     rm -f /tmp/scx-scheds.deb; \
+                 elif curl -fsSL \"{tar_url}\" -o /tmp/scx-scheds.tar.xz; then \
+                     tar -C / -xJf /tmp/scx-scheds.tar.xz && rm -f /tmp/scx-scheds.tar.xz; \
+                 else \
+                     apt-get update && apt-get install -y git build-essential pkg-config clang llvm libbpf-dev libelf-dev libzstd-dev zlib1g-dev protobuf-compiler libseccomp-dev cargo rustc && \
+                     {cargo_fb}; \
+                 fi",
+                ver = SCX_BUNDLE_VERSION,
+                deb_url = deb_url,
+                tar_url = tar_url,
+                cargo_fb = cargo_source_fallback
+            ),
             requires_reboot_for_kernel: !scx_kernel_supported,
         },
         LinuxDistro::Fedora => ScxInstallPlan {
             distro_name: pretty_name.to_string(),
-            summary: "DNF scx-scheds & scx-tools (with CachyOS COPR fallback)".to_string(),
-            command: "dnf install -y scx-scheds scx-tools || (\
-                      dnf copr enable -y bieszczaders/kernel-cachyos-addons && \
-                      dnf install -y scx-scheds scx-tools\
-                      )"
-                .to_string(),
+            summary: format!(
+                "Precompiled scx-scheds-{}-1.x86_64.rpm (Mithrandir bundle / GitHub Release + COPR/Cargo fallback)",
+                SCX_BUNDLE_VERSION
+            ),
+            command: format!(
+                "if [ -n \"$MITHRANDIR_SCX_BUNDLE\" ] && [ -f \"$MITHRANDIR_SCX_BUNDLE\" ]; then \
+                     echo '==> Extracting bundled precompiled sched-ext v{ver} binaries...'; \
+                     tar -C / -xJf \"$MITHRANDIR_SCX_BUNDLE\" && systemctl daemon-reload 2>/dev/null || true; \
+                 elif curl -fsSL \"{rpm_url}\" -o /tmp/scx-scheds.rpm; then \
+                     echo '==> Installing scx-scheds-{ver}-1.x86_64.rpm from Mithrandir GitHub Release...'; \
+                     rpm -Uvh --replacepkgs /tmp/scx-scheds.rpm || dnf install -y /tmp/scx-scheds.rpm; \
+                     rm -f /tmp/scx-scheds.rpm; \
+                 else \
+                     dnf install -y scx-scheds scx-tools || (dnf copr enable -y bieszczaders/kernel-cachyos-addons && dnf install -y scx-scheds scx-tools) || ({cargo_fb}); \
+                 fi",
+                ver = SCX_BUNDLE_VERSION,
+                rpm_url = rpm_url,
+                cargo_fb = cargo_source_fallback
+            ),
             requires_reboot_for_kernel: !scx_kernel_supported,
         },
         LinuxDistro::Arch | LinuxDistro::CachyOS => ScxInstallPlan {
             distro_name: pretty_name.to_string(),
-            summary: "Pacman scx-scheds & scx-tools".to_string(),
-            command: "pacman -Sy --noconfirm --needed scx-scheds scx-tools".to_string(),
+            summary: format!(
+                "Pacman scx-scheds & scx-tools (with Mithrandir v{} bundle fallback)",
+                SCX_BUNDLE_VERSION
+            ),
+            command: format!(
+                "pacman -Sy --noconfirm --needed scx-scheds scx-tools || (\
+                 if [ -n \"$MITHRANDIR_SCX_BUNDLE\" ] && [ -f \"$MITHRANDIR_SCX_BUNDLE\" ]; then \
+                     tar -C / -xJf \"$MITHRANDIR_SCX_BUNDLE\"; \
+                 elif curl -fsSL \"{tar_url}\" -o /tmp/scx-scheds.tar.xz; then \
+                     tar -C / -xJf /tmp/scx-scheds.tar.xz && rm -f /tmp/scx-scheds.tar.xz; \
+                 else \
+                     {cargo_fb}; \
+                 fi)",
+                tar_url = tar_url,
+                cargo_fb = cargo_source_fallback
+            ),
             requires_reboot_for_kernel: !scx_kernel_supported,
         },
         LinuxDistro::OpenSuse => ScxInstallPlan {
             distro_name: pretty_name.to_string(),
-            summary: "Zypper scx package".to_string(),
-            command: "zypper --non-interactive install scx".to_string(),
+            summary: format!(
+                "Zypper / Precompiled scx-scheds-{}-1.x86_64.rpm",
+                SCX_BUNDLE_VERSION
+            ),
+            command: format!(
+                "if [ -n \"$MITHRANDIR_SCX_BUNDLE\" ] && [ -f \"$MITHRANDIR_SCX_BUNDLE\" ]; then \
+                     tar -C / -xJf \"$MITHRANDIR_SCX_BUNDLE\" && systemctl daemon-reload 2>/dev/null || true; \
+                 elif curl -fsSL \"{rpm_url}\" -o /tmp/scx-scheds.rpm; then \
+                     rpm -Uvh --replacepkgs /tmp/scx-scheds.rpm || zypper --non-interactive install /tmp/scx-scheds.rpm; \
+                     rm -f /tmp/scx-scheds.rpm; \
+                 else \
+                     zypper --non-interactive install scx || ({cargo_fb}); \
+                 fi",
+                rpm_url = rpm_url,
+                cargo_fb = cargo_source_fallback
+            ),
             requires_reboot_for_kernel: !scx_kernel_supported,
         },
         _ => ScxInstallPlan {
             distro_name: pretty_name.to_string(),
-            summary: "Source build & install from https://github.com/sched-ext/scx".to_string(),
-            command: "rm -rf /tmp/mithrandir-scx-build && \
-                      git clone --depth 1 https://github.com/sched-ext/scx.git /tmp/mithrandir-scx-build && \
-                      cd /tmp/mithrandir-scx-build && \
-                      meson setup build --prefix=/usr && \
-                      ninja -C build && \
-                      ninja -C build install && \
-                      rm -rf /tmp/mithrandir-scx-build"
-                .to_string(),
+            summary: format!(
+                "Precompiled scx-scheds-{}-x86_64.tar.xz + Cargo source build fallback",
+                SCX_BUNDLE_VERSION
+            ),
+            command: format!(
+                "if [ -n \"$MITHRANDIR_SCX_BUNDLE\" ] && [ -f \"$MITHRANDIR_SCX_BUNDLE\" ]; then \
+                     tar -C / -xJf \"$MITHRANDIR_SCX_BUNDLE\" && systemctl daemon-reload 2>/dev/null || true; \
+                 elif curl -fsSL \"{tar_url}\" -o /tmp/scx-scheds.tar.xz; then \
+                     tar -C / -xJf /tmp/scx-scheds.tar.xz && rm -f /tmp/scx-scheds.tar.xz; \
+                 else \
+                     {cargo_fb}; \
+                 fi",
+                tar_url = tar_url,
+                cargo_fb = cargo_source_fallback
+            ),
             requires_reboot_for_kernel: !scx_kernel_supported,
         },
     }
 }
 
-/// Installs `sched-ext` (`scx`) packages for the current distribution, streaming log lines to `on_line`.
+/// Installs `sched-ext` (`scx` v1.1.4) packages for the current distribution, staging any embedded bundle for host access.
 pub fn install_scx_streaming<F>(mut on_line: F) -> Result<ScxInstallPlan, String>
 where
     F: FnMut(String),
 {
     let plan = get_install_plan();
-    on_line(format!("📦 Installing sched-ext for {} ({})", plan.distro_name, plan.summary));
-    let code = HostBridge::spawn_streaming("sh", &["-c", &plan.command], true, &mut on_line)?;
+    on_line(format!(
+        "📦 Installing sched-ext v{} for {} ({})",
+        SCX_BUNDLE_VERSION, plan.distro_name, plan.summary
+    ));
+
+    // If a bundled archive exists (including inside Flatpak /app/share/mithrandir/scx or AppImage $APPDIR),
+    // stage a copy into the user's XDG cache directory so the host root process can read it directly.
+    let mut staged_bundle_path: Option<PathBuf> = None;
+    if let Some(bundle) = find_bundled_scx_archive() {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+        let cache_dir = Path::new(&home).join(".cache");
+        let _ = fs::create_dir_all(&cache_dir);
+        let staged = cache_dir.join(format!("mithrandir-scx-{}.tar.xz", SCX_BUNDLE_VERSION));
+        if fs::copy(&bundle, &staged).is_ok() {
+            on_line(format!(
+                "✓ Found embedded sched-ext v{} binary bundle ({})",
+                SCX_BUNDLE_VERSION,
+                bundle.display()
+            ));
+            staged_bundle_path = Some(staged);
+        } else {
+            staged_bundle_path = Some(bundle);
+        }
+    }
+
+    let full_cmd = if let Some(ref staged) = staged_bundle_path {
+        format!(
+            "export MITHRANDIR_SCX_BUNDLE=\"{}\"; {}",
+            staged.display(),
+            plan.command
+        )
+    } else {
+        plan.command.clone()
+    };
+
+    let code = HostBridge::spawn_streaming("sh", &["-c", &full_cmd], true, &mut on_line)?;
+
+    if let Some(ref staged) = staged_bundle_path {
+        if staged.starts_with(std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string())) {
+            let _ = fs::remove_file(staged);
+        }
+    }
+
     if code == 0 {
+        on_line("✅ sched-ext (scx) schedulers installed into /usr/bin!".to_string());
         Ok(plan)
     } else {
-        Err(format!("sched-ext installation exited with status code {}", code))
+        Err(format!(
+            "sched-ext installation exited with status code {}",
+            code
+        ))
     }
 }

@@ -226,6 +226,7 @@ fn test_scx_distro_install_plans() {
 
     let fedora_plan = scx::get_install_plan_for_distro(LinuxDistro::Fedora, "Fedora Linux 41", true);
     assert!(fedora_plan.command.contains("scx-scheds"));
+    assert!(scx::find_bundled_scx_archive().is_some());
 
     let arch_plan = scx::get_install_plan_for_distro(LinuxDistro::Arch, "Arch Linux", true);
     assert!(arch_plan.command.contains("pacman"));
