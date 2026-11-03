@@ -5,6 +5,7 @@ pub mod power;
 pub mod kernel;
 pub mod os_info;
 pub mod ai;
+pub mod hardware;
 
 #[cfg(feature = "gui")]
 pub mod ui;

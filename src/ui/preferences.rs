@@ -177,6 +177,7 @@ impl PreferencesDialog {
             .build();
 
         let optional_tabs = [
+            ("hardware", "Hardware Inspector", "computer-symbolic"),
             ("kernel_power", "Kernel & CPU Schedulers", "speedometer-symbolic"),
             ("ai", "AI Optimizer", "starred-symbolic"),
             ("cleaner", "System Cleaner", "edit-clear-all-symbolic"),

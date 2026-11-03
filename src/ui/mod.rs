@@ -9,6 +9,7 @@ pub mod services;
 pub mod uninstaller;
 pub mod btrfs;
 pub mod grub;
+pub mod hardware;
 pub mod preferences;
 pub mod window;
 
@@ -24,4 +25,5 @@ pub use services::ServicesPage;
 pub use uninstaller::UninstallerPage;
 pub use btrfs::BtrfsPage;
 pub use grub::GrubPage;
+pub use hardware::HardwarePage;
 pub use preferences::PreferencesDialog;

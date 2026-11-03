@@ -18,6 +18,7 @@ use crate::ui::btrfs::BtrfsPage;
 use crate::ui::cleaner::CleanerPage;
 use crate::ui::dashboard::DashboardPage;
 use crate::ui::grub::GrubPage;
+use crate::ui::hardware::HardwarePage;
 use crate::ui::kernel_power::KernelPowerPage;
 use crate::ui::preferences::PreferencesDialog;
 use crate::ui::processes::ProcessesPage;
@@ -94,6 +95,7 @@ impl MithrandirWindow {
             .build();
 
         let page_dashboard = DashboardPage::build(Some(toast_overlay.clone()));
+        let page_hardware = HardwarePage::build(Some(toast_overlay.clone()));
         let page_kernel_power = KernelPowerPage::build(Some(toast_overlay.clone()));
         let page_ai = AIPage::build(Some(toast_overlay.clone()));
         let page_cleaner = CleanerPage::build();
@@ -105,6 +107,7 @@ impl MithrandirWindow {
         let page_grub = GrubPage::build();
 
         stack.add_titled(&page_dashboard, Some("dashboard"), "Dashboard");
+        stack.add_titled(&page_hardware, Some("hardware"), "Hardware");
         stack.add_titled(&page_kernel_power, Some("kernel_power"), "Kernel & Power");
         stack.add_titled(&page_ai, Some("ai"), "AI Optimizer");
         stack.add_titled(&page_cleaner, Some("cleaner"), "Cleaner");
@@ -117,6 +120,7 @@ impl MithrandirWindow {
 
         let pages = [
             ("dashboard", "Dashboard", "utilities-system-monitor-symbolic"),
+            ("hardware", "Hardware", "computer-symbolic"),
             ("kernel_power", "Kernel & Power", "speedometer-symbolic"),
             ("ai", "AI Optimizer", "starred-symbolic"),
             ("cleaner", "Cleaner", "edit-clear-all-symbolic"),
@@ -325,7 +329,7 @@ impl MithrandirWindow {
                     .application_name("Mithrandir")
                     .application_icon("io.github.antux912012.Mithrandir")
                     .developer_name("Antux912012")
-                    .version("1.0.1")
+                    .version("1.1.0")
                     .comments("Native Linux System Optimization, Cache Management, CachyOS Scheduler Controller & Hardware Power Manager in Rust (GTK4 & Libadwaita)")
                     .website("https://github.com/Antux912012/mithrandir")
                     .license_type(gtk4::License::Gpl30Only)

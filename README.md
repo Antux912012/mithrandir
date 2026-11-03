@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.0.1-brightgreen.svg" alt="Version" /></a>
+  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.1.0-brightgreen.svg" alt="Version" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later" /></a>
   <a href="https://gtk.org/"><img src="https://img.shields.io/badge/GUI-GTK%204%20%7C%20Libadwaita-brightgreen.svg" alt="GTK4 & Libadwaita" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.80%2B-informational.svg" alt="Rust 1.80+" /></a>
@@ -56,6 +56,7 @@
 | Feature / Area | Capabilities | Status |
 | :--- | :--- | :--- |
 | **System Dashboard & Telemetry** | CPU, Dual GPU, Network Rx/Tx, Thermal Zones, Battery Wh/Health, Host Specs | ✅ Active |
+| **Hardware Inspection & Guide** | Check Your Hardware integration: Battery FRU/health, NVMe/SATA, RAM SODIMM, EDID display, PCI network & parts replacement | ✅ Active |
 | **CachyOS Schedulers & Power** | BORE runtime/persist toggle, sched-ext (SCX) BPF schedulers, CPU governors, EPP, Turbo Boost | ✅ Active |
 | **Smart Boost (RAM & Cache trim)**| Standby cache trimming, debounced re-entrancy guard, automated threshold daemon | ✅ Active |
 | **Multi-Threaded Cache Cleaner** | Thumbnails, Browser, Stremio, Dev, Trash, Journal, Flatpak sandbox safe cache | ✅ Active |
