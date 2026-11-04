@@ -50,7 +50,7 @@ impl AIOptimizerEngine {
             Hardware & Scheduler Telemetry:\n\
             - CPU: {} cores, {} (Usage: {:.1}%)\n\
             - Governor: {} | EPP: {} | Turbo: {}\n\
-            - Scheduler: CachyOS={}, BORE={}, SCX={}\n\
+            - Scheduler: CachyOS={}, BORE={}\n\
             - User Temp Files: {:.1}MB ({} files in /tmp)\n",
             base_snapshot,
             cpu.core_count,
@@ -61,7 +61,6 @@ impl AIOptimizerEngine {
             turbo,
             kinfo.is_cachyos,
             kinfo.bore_enabled,
-            kinfo.scx_active_scheduler,
             tmp_mb,
             tmp_count,
         );

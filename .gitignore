@@ -6,3 +6,5 @@ repo-rs/
 pkg-deb/usr/
 *.flatpak
 *.AppImage
+*.deb
+.env

@@ -34,10 +34,6 @@ install -m 644 "${ROOT_DIR}/data/${APP_ID}.desktop" "${APPDIR}/usr/share/applica
 install -m 644 "${ROOT_DIR}/data/${APP_ID}.gschema.xml" "${APPDIR}/usr/share/glib-2.0/schemas/${APP_ID}.gschema.xml"
 install -m 644 "${ROOT_DIR}/data/${APP_ID}.metainfo.xml" "${APPDIR}/usr/share/metainfo/${APP_ID}.metainfo.xml"
 cp -r "${ROOT_DIR}/data/icons/hicolor/"* "${APPDIR}/usr/share/icons/hicolor/"
-if [[ -d "${ROOT_DIR}/data/scx" ]]; then
-  mkdir -p "${APPDIR}/usr/share/mithrandir/scx"
-  cp -f "${ROOT_DIR}/data/scx/"* "${APPDIR}/usr/share/mithrandir/scx/"
-fi
 
 # Compile gsettings schemas
 glib-compile-schemas "${APPDIR}/usr/share/glib-2.0/schemas"

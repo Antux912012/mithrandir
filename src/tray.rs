@@ -144,9 +144,7 @@ impl Tray for MithrandirTray {
         let kinfo = crate::kernel::detect_kernel();
         let current_preset = crate::power::get_active_preset();
 
-        let sched_info = if kinfo.scx_supported && kinfo.scx_active_scheduler != "none" {
-            format!("Active: {}", kinfo.scx_active_scheduler)
-        } else if kinfo.bore_supported && kinfo.bore_enabled {
+        let sched_info = if kinfo.bore_supported && kinfo.bore_enabled {
             "Active: BORE".to_string()
         } else if kinfo.bore_supported && !kinfo.bore_enabled {
             "Active: EEVDF".to_string()

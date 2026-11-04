@@ -394,9 +394,7 @@ impl DashboardPage {
         });
 
         let kinfo = crate::kernel::detect_kernel();
-        let sched_name = if kinfo.scx_supported && kinfo.scx_active_scheduler != "none" {
-            format!("sched-ext: {}", kinfo.scx_active_scheduler)
-        } else if kinfo.bore_supported && kinfo.bore_enabled {
+        let sched_name = if kinfo.bore_supported && kinfo.bore_enabled {
             "BORE (Active)".to_string()
         } else if kinfo.bore_supported && !kinfo.bore_enabled {
             "EEVDF (Vanilla)".to_string()

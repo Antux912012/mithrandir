@@ -4,7 +4,7 @@
 **Mithrandir** (consolidating `mithrandir` and `mithrandir-rs`) is a native Linux system optimization, cache management, CachyOS scheduler controller, and hybrid GPU power utility written in **Rust**, **GTK4**, **Libadwaita**, and **`ksni`** (StatusNotifierItem system tray).
 
 ### Primary Target Environments
-1. **Debian Testing / Unstable** with the **CachyOS Kernel** (`linux-cachyos`, BORE, EEVDF, `sched-ext`).
+1. **Debian Testing / Unstable** with the **CachyOS Kernel** (`linux-cachyos`, BORE, EEVDF).
 2. **Kepler OS**: Immutable rolling-release Linux distribution based on Debian Testing (`OSTree` / `bootc` container delivery, GNOME 50+, CachyOS kernel).
 3. **Hardware Optimization Targets**: Intel H-series / Core / Xeon laptops and workstations with hybrid Intel Integrated + NVIDIA Optimus discrete GPUs (spanning legacy Maxwell/Pascal GPUs such as NVIDIA Quadro M1200 up to modern Turing/Ampere/Ada architectures).
 
@@ -38,8 +38,7 @@ mithrandir/
 │   │   └── system.rs                                 # Package & user cache cleaner
 │   ├── kernel/
 │   │   ├── mod.rs
-│   │   ├── bore.rs                                   # CachyOS BORE / EEVDF sysctl controller
-│   │   └── scx.rs                                    # sched-ext BPF loader (org.scx.Loader D-Bus)
+│   │   └── bore.rs                                   # CachyOS BORE / EEVDF sysctl controller
 │   ├── power/
 │   │   ├── mod.rs
 │   │   ├── profiles.rs                               # CPU governor, EPP, Turbo Boost, UPower D-Bus
@@ -141,22 +140,7 @@ Flatpak stores per-application files under `$HOME/.var/app/<app-id>/`. Wiping th
    - Apply runtime state via privileged helper: write `1` or `0` to `/proc/sys/kernel/sched_bore`.
    - Apply persistent state across reboots (compatible with Debian & Kepler OS `/etc` overlay): write `kernel.sched_bore = 1` (or `0`) to `/etc/sysctl.d/99-mithrandir-scheduler.conf`.
 
-### 5.2 `sched-ext` (SCX) BPF Pluggable Schedulers (`src/kernel/scx.rs`)
-1. **Sysfs Telemetry**:
-   - Read `/sys/kernel/sched_ext/state` (`enabled` | `disabled`) and `/sys/kernel/sched_ext/root/ops` (e.g., `bpfland`, `lavd`, `rusty`, `flash`, `cosmos`).
-2. **Primary Control via System D-Bus (`zbus` -> `org.scx.Loader`)**:
-   - Service: `org.scx.Loader`, Path: `/org/scx/Loader`, Interface: `org.scx.Loader`.
-   - Read Properties:
-     - `CurrentScheduler` (`String`)
-     - `SchedulerMode` (`u32`: `0` = Auto, `1` = Gaming, `2` = PowerSave, `3` = LowLatency, `4` = Server)
-     - `SupportedSchedulers` (`Vec<String>`: e.g., `scx_bpfland`, `scx_lavd`, `scx_rusty`, `scx_flash`, `scx_cosmos`)
-   - Invoke Methods:
-     - `SwitchScheduler(scx_name: &str, mode: u32)`
-     - `StopScheduler()` (detaches BPF scheduler and returns control to in-kernel BORE/EEVDF).
-3. **CLI Fallback (`scxctl`)**:
-   - If `org.scx.Loader` D-Bus is inactive, check `scxctl` binary availability (`scxctl switch --sched <name> --mode <mode>` and `scxctl stop`).
-
-### 5.3 CPU Governors, EPP & Turbo Boost (`src/power/profiles.rs`)
+### 5.2 CPU Governors, EPP & Turbo Boost (`src/power/profiles.rs`)
 1. **System Power Profiles (`zbus`)**:
    - Interface with `org.freedesktop.UPower.PowerProfiles` (fallback `net.hadess.PowerProfiles`) to read/write `ActiveProfile` (`power-saver`, `balanced`, `performance`).
 2. **CPUFreq Governor & P-State EPP**:
@@ -223,12 +207,12 @@ To prevent GNOME Wayland (`gnome-shell`) from opening `/dev/dri/renderD129` on b
 
 Synchronize all subsystems into 4 one-click profiles accessible from both the GTK4 window and the `ksni` System Tray:
 
-| Mithrandir Preset | UPower Profile | Governor / EPP | Scheduler (`sched-ext` / BORE) | CPU Turbo Boost | NVIDIA dGPU State |
+| Mithrandir Preset | UPower Profile | Governor / EPP | Scheduler (BORE) | CPU Turbo Boost | NVIDIA dGPU State |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Battery / Longevity** | `power-saver` | `powersave` / `power` | `scx_bpfland` (Mode 2: PowerSave) or BORE (`1`) | **OFF** (`no_turbo=1`) | `IntegratedOnlyPcieRemoved` (or `HybridRuntimeAuto`) |
-| **Balanced (Daily Dev)** | `balanced` | `powersave` / `balance_performance` | In-Kernel **BORE** (`sched_bore=1`, SCX stopped) | **ON** | `HybridRuntimeAuto` |
-| **Low-Latency / IDE** | `performance` | `performance` / `balance_performance` | `scx_lavd` or `scx_bpfland` (Mode 3: LowLatency) | **ON** | `HybridRuntimeAuto` |
-| **Max Performance** | `performance` | `performance` / `performance` | `scx_bpfland` or `scx_lavd` (Mode 1: Gaming) | **ON** | `PerformanceForcedOn` (PCIe attached) |
+| **Battery / Longevity** | `power-saver` | `powersave` / `power` | EEVDF (`sched_bore=0`) | **OFF** (`no_turbo=1`) | `IntegratedOnlyPcieRemoved` (or `HybridRuntimeAuto`) |
+| **Balanced (Daily Dev)** | `balanced` | `schedutil` / `balance_performance` | In-Kernel **BORE** (`sched_bore=1`) | **ON** | `HybridRuntimeAuto` |
+| **Low-Latency / IDE** | `performance` | `performance` / `balance_performance` | In-Kernel **BORE** (`sched_bore=1`) | **ON** | `HybridRuntimeAuto` |
+| **Max Performance** | `performance` | `performance` / `performance` | In-Kernel **BORE** (`sched_bore=1`) | **ON** | `PerformanceForcedOn` (PCIe attached) |
 
 ---
 
@@ -244,12 +228,10 @@ Synchronize all subsystems into 4 one-click profiles accessible from both the GT
      - Action row: **Remove Unused Runtimes** (`flatpak uninstall --unused`).
      - Action row: **Scan Orphaned App Data** (`destructive-action` confirmation dialog).
 2. **View 2: Kernel, Scheduler & Power (`src/ui/kernel_power_page.rs`)**
-   - **Status Banner**: Displays kernel release (`uname -r`), active scheduler badge (`BORE`, `EEVDF`, or `scx_*`), CPU scaling driver, and dGPU D-state / PCIe status.
+   - **Status Banner**: Displays kernel release (`uname -r`), active scheduler badge (`BORE` or `EEVDF`), CPU scaling driver, and dGPU D-state / PCIe status.
    - **Group 1 — Mithrandir Unified Presets**: 4-button segmented selector (`Battery`, `Balanced`, `Low-Latency`, `Max Performance`).
    - **Group 2 — CachyOS Scheduler**:
      - `AdwSwitchRow`: BORE Burst-Oriented Scheduler (`kernel.sched_bore`).
-     - `AdwComboRow`: `sched-ext` BPF Scheduler (`Disabled (Use BORE/EEVDF)`, `scx_bpfland`, `scx_lavd`, `scx_rusty`, `scx_flash`, `scx_cosmos`).
-     - `AdwComboRow`: `sched-ext` Profile Mode (`Auto`, `Gaming`, `PowerSave`, `LowLatency`, `Server`).
    - **Group 3 — CPU Frequency & Thermals**:
      - `AdwComboRow`: Scaling Governor.
      - `AdwComboRow`: Energy Performance Preference (EPP).
@@ -288,6 +270,6 @@ All filesystem/sysfs interactions must accept a configurable base root path (`&P
 ## 10. Implementation Execution Order (Phase Gates for AI Coding Agent)
 - **Phase 1**: Update `Cargo.toml`, application IDs, and Desktop/Polkit metadata to `Mithrandir`.
 - **Phase 2**: Implement `src/cleaner/flatpak.rs` and pass `cargo test --test flatpak_cleaner_test`.
-- **Phase 3**: Implement `src/kernel/bore.rs`, `src/kernel/scx.rs`, and `src/power/profiles.rs` and pass `cargo test --test kernel_sysfs_test`.
+- **Phase 3**: Implement `src/kernel/bore.rs` and `src/power/profiles.rs` and pass `cargo test --test kernel_sysfs_test`.
 - **Phase 4**: Implement `src/power/gpu.rs`, `src/power/coordinator.rs`, and the privileged CLI entrypoint (`--apply-privileged`), then pass `cargo test --test gpu_power_test`.
 - **Phase 5**: Wire the GTK4/Libadwaita UI pages and `ksni` tray menu to the backend controllers and verify `cargo build --release` compiles with zero warnings.

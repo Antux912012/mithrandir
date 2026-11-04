@@ -1,5 +1,5 @@
 {
-  "app-id": "io.github.antonio.Mithrandir",
+  "id": "io.github.antux912012.Mithrandir",
   "runtime": "org.gnome.Platform",
   "runtime-version": "50",
   "sdk": "org.gnome.Sdk",
@@ -12,13 +12,10 @@
     "--device=dri",
     "--filesystem=home",
     "--filesystem=~/.var/app",
-    "--filesystem=xdg-cache",
-    "--filesystem=xdg-config/autostart",
     "--talk-name=org.freedesktop.Flatpak",
     "--system-talk-name=org.freedesktop.systemd1",
     "--talk-name=org.freedesktop.secrets",
     "--talk-name=org.kde.StatusNotifierWatcher",
-    "--system-talk-name=org.scx.Loader",
     "--system-talk-name=org.freedesktop.UPower.PowerProfiles",
     "--system-talk-name=net.hadess.PowerProfiles"
   ],
@@ -39,8 +36,9 @@
       "buildsystem": "simple",
       "build-commands": [
         "install -Dm755 target/release/mithrandir /app/bin/mithrandir",
-        "install -Dm644 data/io.github.antonio.Mithrandir.desktop /app/share/applications/io.github.antonio.Mithrandir.desktop",
-        "install -Dm644 data/io.github.antonio.Mithrandir.gschema.xml /app/share/glib-2.0/schemas/io.github.antonio.Mithrandir.gschema.xml",
+        "install -Dm644 data/io.github.antux912012.Mithrandir.desktop /app/share/applications/io.github.antux912012.Mithrandir.desktop",
+        "install -Dm644 data/io.github.antux912012.Mithrandir.metainfo.xml /app/share/metainfo/io.github.antux912012.Mithrandir.metainfo.xml",
+        "install -Dm644 data/io.github.antux912012.Mithrandir.gschema.xml /app/share/glib-2.0/schemas/io.github.antux912012.Mithrandir.gschema.xml",
         "glib-compile-schemas /app/share/glib-2.0/schemas/",
         "mkdir -p /app/share/icons/hicolor",
         "cp -r data/icons/hicolor/* /app/share/icons/hicolor/"

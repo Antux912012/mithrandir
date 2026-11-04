@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="data/icons/hicolor/scalable/apps/io.github.antonio.Mithrandir.svg" width="128" height="128" alt="Mithrandir Application Icon" />
+  <img src="data/icons/hicolor/scalable/apps/io.github.antux912012.Mithrandir.svg" width="128" height="128" alt="Mithrandir Application Icon" />
 </p>
 
 <h1 align="center">Mithrandir 🦀</h1>
 
 <p align="center">
-  <strong>Native GTK4 & Libadwaita GNU/Linux System Optimizer, Deep Cleaner, CachyOS Scheduler & Power Manager</strong><br>
+  <strong>Native GTK4 & Libadwaita GNU/Linux System Optimizer, Deep Cleaner, BORE Scheduler & Power Manager</strong><br>
   <em>Blazing-fast native execution, instant startup, and low memory overhead written in Rust.</em>
 </p>
 
 <p align="center">
-  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.1.1-brightgreen.svg" alt="Version" /></a>
+  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.1.2-brightgreen.svg" alt="Version" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later" /></a>
   <a href="https://gtk.org/"><img src="https://img.shields.io/badge/GUI-GTK%204%20%7C%20Libadwaita-brightgreen.svg" alt="GTK4 & Libadwaita" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.80%2B-informational.svg" alt="Rust 1.80+" /></a>
@@ -19,21 +19,23 @@
 
 ---
 
-**Mithrandir** is a blazing-fast, native system optimizer, deep cleaner, telemetry monitor, CachyOS kernel scheduler manager, and hardware power optimizer written in **Rust** with **GTK4** and **Libadwaita**, engineered for instant startup, minimal memory footprint, and robust multi-distribution compatibility.
+> [!IMPORTANT]
+> **Trademark & Non-Affiliation Disclaimer**: Mithrandir is an independent open-source utility developed by Antonio (`Antux912012`) and is not affiliated with, endorsed by, or sponsored by the CachyOS, GNOME, Debian, Fedora, or Arch Linux projects.
+
+**Mithrandir** is a blazing-fast, native system optimizer, deep cleaner, telemetry monitor, BORE kernel scheduler controller, and hardware power optimizer written in **Rust** with **GTK4** and **Libadwaita**, engineered for instant startup, minimal memory footprint, and robust multi-distribution compatibility.
 
 > [!NOTE]
-> **What's New in v1.1.1:**
-> - 🚀 **Unified Architecture**: Rust workspace consolidating all features into a single high-performance binary.
+> **What's New in v1.1.2:**
+> - 🚀 **Streamlined Kernel & Power Management**: Focused kernel tuning around BORE (`sched_bore`), CPU frequency scaling governors, Energy Performance Preferences (EPP), Turbo Boost, and PCIe ASPM (removed `sched-ext` / SCX integration and bundled archives).
+> - 📦 **Flathub Policy & AppStream 1.0 Compliance**: Updated AppStream metadata (`io.github.antux912012.Mithrandir.metainfo.xml`), sandbox permissions, and Flatpak packaging to adhere to Flathub guidelines.
 > - 🧹 **Hardened Flatpak Cache Safety**: Strict XDG sandbox boundary validation ensuring `config/`, `data/`, and `.local/state/` are never touched.
-> - 🧠 **CachyOS Schedulers**: Full runtime and persistent control for BORE (`sched_bore`) and `sched-ext` (SCX BPF schedulers) via system D-Bus.
 > - ⚡ **Mithrandir Presets**: One-click switching across 4 profiles (Battery/Silent, Balanced, Low-Latency/Workstation, Gaming).
-> - 📦 **Modern Universal Distribution**: Standalone AppImage, single-file Flatpak bundle, and Arch Linux / CachyOS AUR package.
 
 ---
 
 ## 📸 Screenshots
 
-| 📊 Real-Time Dashboard & Telemetry | ⚡ CachyOS Kernel & Power Management |
+| 📊 Real-Time Dashboard & Telemetry | ⚡ Kernel & Power Management |
 | :---: | :---: |
 | ![Dashboard](data/screenshots/01-dashboard.png) | ![Kernel & Power](data/screenshots/02-kernel-power.png) |
 
@@ -57,7 +59,7 @@
 | :--- | :--- | :--- |
 | **System Dashboard & Telemetry** | CPU, Dual GPU, Network Rx/Tx, Thermal Zones, Battery Wh/Health, Host Specs | ✅ Active |
 | **Hardware Inspection & Guide** | Check Your Hardware integration: Battery FRU/health, NVMe/SATA, RAM SODIMM, EDID display, PCI network & parts replacement | ✅ Active |
-| **CachyOS Schedulers & Power** | BORE runtime/persist toggle, sched-ext (SCX) BPF schedulers, CPU governors, EPP, Turbo Boost | ✅ Active |
+| **Kernel Scheduler & Power** | BORE runtime/persist toggle, CPU scaling governors, EPP, Turbo Boost, PCIe ASPM | ✅ Active |
 | **Smart Boost (RAM & Cache trim)**| Standby cache trimming, debounced re-entrancy guard, automated threshold daemon | ✅ Active |
 | **Multi-Threaded Cache Cleaner** | Thumbnails, Browser, Stremio, Dev, Trash, Journal, Flatpak sandbox safe cache | ✅ Active |
 | **Process & Task Explorer** | Live accurate CPU% & RAM, filter, search, kill/terminate signals | ✅ Active |
@@ -91,22 +93,13 @@ Mithrandir includes hardware-level battery and power saving controls synced acro
 - **Zero-Password Udev Optimization**: Generates `99-mithrandir-power.rules` dynamically targeting the correct administrative group (`wheel` for Fedora/Arch/openSUSE, `sudo` for Debian/Ubuntu).
 - **SELinux & Immutability Awareness**: Native `/etc/os-release` detection (`src/os_info.rs`) automatically recognizes NixOS and immutable trees, gracefully skipping direct `/etc` modifications with clear user guidance.
 
-### 🔄 Pluggable `sched-ext` (SCX v1.1.4) BPF CPU Schedulers
+### 🔒 Flatpak Sandbox Permissions
 
-Mithrandir bundles and distributes precompiled **`sched-ext` (`scx` v1.1.4)** userspace BPF CPU schedulers (`scx_bpfland`, `scx_lavd`, `scx_flash`, `scx_rusty`, `scx_cosmos`, `scx_p2dq`, `scx_beerland`, `scx_rustland`, `scx_layered`, `scx_tickless`, `scx_cake`, `scx_eevdf`, `scx_mitosis`, `scx_rlfifo`, and `scxctl`):
-
-- **3-Stage Hybrid Installation** (GUI **"Install SCX"** button in *Kernel & Power* or `mithrandir --install-scx`):
-  1. **Embedded Binary Bundle (`scx-scheds-1.1.4-x86_64.tar.xz`)**: Instantly installs all 14 precompiled `scx_*` binaries + `scxctl` + `scx.service` offline directly from Mithrandir's package.
-  2. **GitHub Releases `.deb` / `.rpm` / `.tar.xz`**: Downloads and installs `scx-scheds_1.1.4_amd64.deb` (Debian/Ubuntu) or `scx-scheds-1.1.4-1.x86_64.rpm` (Fedora/openSUSE) from Mithrandir Releases.
-  3. **Automated Cargo Source Build Fallback**: Clones `https://github.com/sched-ext/scx.git` (`v1.1.4`) and compiles with `cargo build --profile=release-tiny`.
-- **Standalone SCX Package Builder**:
-  ```bash
-  ./packaging/build_scx_packages.sh
-  # Outputs in dist/scx/:
-  #   - scx-scheds_1.1.4_amd64.deb
-  #   - scx-scheds-1.1.4-1.x86_64.rpm
-  #   - scx-scheds-1.1.4-x86_64.tar.xz
-  ```
+When packaged as a Flatpak (`io.github.antux912012.Mithrandir`), Mithrandir requests the following permissions:
+- `--filesystem=home` and `--filesystem=~/.var/app`: Required to scan and clean user caches, thumbnails, developer build caches, XDG autostart entries, and per-app Flatpak caches (`~/.var/app/*/cache` only).
+- `--talk-name=org.freedesktop.Flatpak`: Required to bridge system diagnostics, package management, BTRFS snapshots, and GRUB/kernel operations to the host via `flatpak-spawn --host`.
+- `--system-talk-name=org.freedesktop.systemd1`, `--system-talk-name=org.freedesktop.UPower.PowerProfiles`, `--system-talk-name=net.hadess.PowerProfiles`: Required for systemd service inspection and system power profile switching.
+- `--talk-name=org.kde.StatusNotifierWatcher`: Required for StatusNotifierItem system tray integration.
 
 ---
 
@@ -114,21 +107,26 @@ Mithrandir bundles and distributes precompiled **`sched-ext` (`scx` v1.1.4)** us
 
 Pre-built standalone packages are ready in the repository root:
 
-### AppImage (`.AppImage`)
-Run instantly on any modern GNU/Linux distribution:
-```bash
-chmod +x ./mithrandir-1.1.1-x86_64.AppImage
-./mithrandir-1.1.1-x86_64.AppImage
-```
-
 ### Flatpak Bundle (`.flatpak`)
 Install the sandboxed single-file bundle:
 ```bash
-flatpak install --user mithrandir_1.1.1.flatpak
+flatpak install --user mithrandir_1.1.2.flatpak
 ```
 Run via Flatpak:
 ```bash
 flatpak run io.github.antux912012.Mithrandir
+```
+
+### Debian / Ubuntu Package (`.deb`)
+```bash
+sudo dpkg -i mithrandir_1.1.2_amd64.deb
+```
+
+### AppImage (`.AppImage`)
+Run instantly on any modern GNU/Linux distribution:
+```bash
+chmod +x ./mithrandir-1.1.2-x86_64.AppImage
+./mithrandir-1.1.2-x86_64.AppImage
 ```
 
 ### Arch Linux / CachyOS (AUR)
@@ -158,11 +156,8 @@ mithrandir --smart-boost
 # View live system telemetry
 mithrandir --monitor
 
-# Inspect CachyOS BORE & sched-ext (SCX) kernel status
+# Inspect CachyOS BORE kernel & power status
 mithrandir --kernel
-
-# Install or update sched-ext (SCX v1.1.4) BPF schedulers
-mithrandir --install-scx
 
 # Scan cleanable clutter and caches
 mithrandir --clean
@@ -174,14 +169,17 @@ mithrandir --clean
 
 ### Quick Build with Makefile
 ```bash
-# Build all targets (release binary, Flatpak, AppImage)
+# Build all targets (release binary, Flatpak, Deb, AppImage)
 make all
-
-# Build only the AppImage package
-make appimage
 
 # Build only the Flatpak bundle
 make flatpak
+
+# Build only the Debian package
+make deb
+
+# Build only the AppImage package
+make appimage
 
 # Run unit & integration test suite
 make test
@@ -191,12 +189,5 @@ make test
 
 ## 🔮 Project Roadmap & Future Rebranding
 
-- **Deprecation of Standard Mithrandir**: The legacy Python/GTK4 version ([Mithrandir](https://github.com/Antux912012/mithrandir)) will be deprecated in favor of this native Rust implementation.
-- **Continuous Improvements**: Active feature development, deep hardware integrations, system cleaners, and package management will continue exclusively in Mithrandir.
-- **Future Rebranding**: Once feature maturity and full stability are consolidated, this project will be officially rebranded as either **Mithrandir** or **Radagast** 🧙‍♂️.
-
----
-
-## 🔗 Related Projects
-
-- **[Mithrandir (Original Python / Libadwaita Edition)](https://github.com/Antux912012/mithrandir)**: The previous Python reference implementation (entering deprecation).
+- **Deprecation of Standard Mithrandir**: The legacy Python/GTK4 version ([Mithrandir](https://github.com/Antux912012/mithrandir)) has been superseded by this native Rust implementation.
+- **Continuous Improvements**: Active feature development, deep hardware integrations, system cleaners, and package management continue exclusively in Mithrandir.

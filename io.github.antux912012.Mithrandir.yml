@@ -1,0 +1,46 @@
+id: io.github.antux912012.Mithrandir
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+command: mithrandir
+
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=home
+  - --filesystem=~/.var/app
+  - --talk-name=org.freedesktop.Flatpak
+  - --system-talk-name=org.freedesktop.systemd1
+  - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --system-talk-name=org.freedesktop.UPower.PowerProfiles
+  - --system-talk-name=net.hadess.PowerProfiles
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /man
+  - /share/doc
+  - /share/gtk-doc
+  - /share/man
+  - /share/pkgconfig
+  - '*.la'
+  - '*.a'
+
+modules:
+  - name: mithrandir
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 target/release/mithrandir /app/bin/mithrandir
+      - install -Dm644 data/io.github.antux912012.Mithrandir.desktop /app/share/applications/io.github.antux912012.Mithrandir.desktop
+      - install -Dm644 data/io.github.antux912012.Mithrandir.metainfo.xml /app/share/metainfo/io.github.antux912012.Mithrandir.metainfo.xml
+      - install -Dm644 data/io.github.antux912012.Mithrandir.gschema.xml /app/share/glib-2.0/schemas/io.github.antux912012.Mithrandir.gschema.xml
+      - glib-compile-schemas /app/share/glib-2.0/schemas/
+      - mkdir -p /app/share/icons/hicolor
+      - cp -r data/icons/hicolor/* /app/share/icons/hicolor/
+    sources:
+      - type: dir
+        path: .

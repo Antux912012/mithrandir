@@ -142,7 +142,7 @@ impl AIClient {
 
         let mut headers = vec![
             ("Content-Type", "application/json"),
-            ("User-Agent", "Mithrandir/1.1.1"),
+            ("User-Agent", "Mithrandir/1.1.2"),
         ];
 
         let auth_hdr = if !self.api_key.is_empty() {

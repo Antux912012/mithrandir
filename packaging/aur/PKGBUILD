@@ -1,6 +1,6 @@
 # Maintainer: Antonio <antux912012@users.noreply.github.com>
 pkgname=mithrandir
-pkgver=1.1.1
+pkgver=1.1.2
 pkgrel=1
 pkgdesc="Native GTK4 & Libadwaita GNU/Linux System Optimizer, CachyOS Scheduler & Power Manager in Rust"
 arch=('x86_64')
@@ -25,7 +25,6 @@ optdepends=(
     'btrfs-progs: BTRFS subvolume and snapshot management'
     'papirus-icon-theme: Recommended icon theme'
     'power-profiles-daemon: Dynamic system power profile integration'
-    'scxctl: Sched-ext BPF scheduler CLI control'
 )
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Antux912012/${pkgname}/archive/refs/tags/v${pkgver}.tar.gz")
 sha256sums=('SKIP')

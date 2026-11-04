@@ -1,6 +1,6 @@
-.PHONY: all build test check clean appimage flatpak aur publish
+.PHONY: all build test check clean appimage flatpak deb aur publish
 
-all: build flatpak appimage aur
+all: build flatpak deb appimage aur
 
 build:
 	podman run --rm --userns=keep-id \
@@ -26,6 +26,9 @@ appimage:
 flatpak:
 	./packaging/build_flatpak.sh
 
+deb:
+	./packaging/build_deb.sh
+
 aur:
 	@echo "==> AUR PKGBUILD is ready in packaging/aur/PKGBUILD"
 
@@ -34,4 +37,4 @@ publish:
 
 clean:
 	cargo clean
-	rm -rf target/pkg-flatpak target/repo-flatpak target/pkg-appimage *.AppImage *.flatpak
+	rm -rf target/pkg-flatpak target/repo-flatpak target/pkg-appimage target/pkg-deb *.AppImage *.flatpak *.deb

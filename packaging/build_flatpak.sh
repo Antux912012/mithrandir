@@ -21,6 +21,11 @@ if [[ ! -f "${ROOT_DIR}/target/release/mithrandir" ]]; then
     cargo build --release --features gui
 fi
 
+echo "==> Validating Desktop Entry and AppStream MetaInfo inside Podman container..."
+podman run --rm --userns=keep-id \
+  -v "${ROOT_DIR}:/workspace:Z" -w /workspace localhost/dev-fedora \
+  bash -c "desktop-file-validate data/${APP_ID}.desktop && appstreamcli validate --explain data/${APP_ID}.metainfo.xml"
+
 BUILD_DIR="${ROOT_DIR}/target/pkg-flatpak"
 REPO_DIR="${ROOT_DIR}/target/repo-flatpak"
 rm -rf "${BUILD_DIR}" "${REPO_DIR}"
@@ -30,17 +35,12 @@ echo "==> Initializing Flatpak environment with native flatpak tool..."
 flatpak build-init "${BUILD_DIR}" "${APP_ID}" org.gnome.Platform org.gnome.Platform 50
 
 echo "==> Staging application files into /app..."
-mkdir -p "${BUILD_DIR}/files"/{bin,share/applications,share/glib-2.0/schemas,share/metainfo,share/appdata,share/icons/hicolor,share/mithrandir/screenshots,share/app-info/media/${APP_ID}}
+mkdir -p "${BUILD_DIR}/files"/{bin,share/applications,share/glib-2.0/schemas,share/metainfo,share/icons/hicolor,share/mithrandir/screenshots,share/app-info/media/${APP_ID}}
 install -m 755 "${ROOT_DIR}/target/release/mithrandir" "${BUILD_DIR}/files/bin/mithrandir"
 install -m 644 "${ROOT_DIR}/data/${APP_ID}.desktop" "${BUILD_DIR}/files/share/applications/${APP_ID}.desktop"
 install -m 644 "${ROOT_DIR}/data/${APP_ID}.gschema.xml" "${BUILD_DIR}/files/share/glib-2.0/schemas/${APP_ID}.gschema.xml"
 install -m 644 "${ROOT_DIR}/data/${APP_ID}.metainfo.xml" "${BUILD_DIR}/files/share/metainfo/${APP_ID}.metainfo.xml"
-install -m 644 "${ROOT_DIR}/data/${APP_ID}.metainfo.xml" "${BUILD_DIR}/files/share/appdata/${APP_ID}.appdata.xml"
 cp -r "${ROOT_DIR}/data/icons/hicolor/"* "${BUILD_DIR}/files/share/icons/hicolor/"
-if [[ -d "${ROOT_DIR}/data/scx" ]]; then
-  mkdir -p "${BUILD_DIR}/files/share/mithrandir/scx"
-  cp -f "${ROOT_DIR}/data/scx/"* "${BUILD_DIR}/files/share/mithrandir/scx/"
-fi
 
 # Stage screenshots for Software Center and offline media caches
 if [[ -d "${ROOT_DIR}/data/screenshots" ]]; then
@@ -67,13 +67,10 @@ flatpak build-finish "${BUILD_DIR}" \
   --device=dri \
   --filesystem=home \
   --filesystem=~/.var/app \
-  --filesystem=xdg-cache \
-  --filesystem=xdg-config/autostart \
   --talk-name=org.freedesktop.Flatpak \
   --system-talk-name=org.freedesktop.systemd1 \
   --talk-name=org.freedesktop.secrets \
   --talk-name=org.kde.StatusNotifierWatcher \
-  --system-talk-name=org.scx.Loader \
   --system-talk-name=org.freedesktop.UPower.PowerProfiles \
   --system-talk-name=net.hadess.PowerProfiles
 

@@ -1,15 +1,14 @@
 use gtk4::prelude::*;
-use gtk4::{Align, Box as GtkBox, Button, Image, Orientation, ScrolledWindow, StringList};
+use gtk4::{Align, Button, Image, ScrolledWindow, StringList};
 use libadwaita as adw;
 use adw::prelude::*;
 use adw::{
-    ActionRow, ButtonContent, ComboRow, PreferencesGroup, PreferencesPage, SwitchRow, Toast,
-    ToastOverlay,
+    ActionRow, ComboRow, PreferencesGroup, PreferencesPage, SwitchRow, Toast, ToastOverlay,
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::kernel::{bore, detect_kernel, scx, KernelInfo};
+use crate::kernel::{bore, detect_kernel};
 use crate::power::{
     coordinator::{apply_preset, get_active_preset, run_privileged_helper, PowerPreset},
     profiles::{
@@ -21,26 +20,6 @@ use crate::power::{
 pub struct KernelPowerPage;
 
 impl KernelPowerPage {
-    fn format_scx_status_subtitle(kinfo: &KernelInfo) -> String {
-        let kernel_diag = scx::get_kernel_scx_diagnostic();
-        let count = kinfo.supported_scx_schedulers.len();
-        let plan = scx::get_install_plan();
-        if count == 0 {
-            format!(
-                "{} • No scx_* binaries found • Ready to install ({})",
-                kernel_diag, plan.summary
-            )
-        } else {
-            format!(
-                "{} • Selected/Active: {} • {} scx_* schedulers installed ({})",
-                kernel_diag,
-                kinfo.scx_active_scheduler,
-                count,
-                kinfo.supported_scx_schedulers.join(", ")
-            )
-        }
-    }
-
     pub fn build(toast_overlay: Option<ToastOverlay>) -> ScrolledWindow {
         let scroller = ScrolledWindow::builder()
             .vexpand(true)
@@ -65,25 +44,25 @@ impl KernelPowerPage {
             (
                 PowerPreset::Battery,
                 "Battery / Silent",
-                "Quiet operation, minimal clock speeds, ASPM powersupersave, scx_lavd powersave",
+                "Quiet operation, minimal clock speeds, Turbo Boost off, and PCIe ASPM powersupersave",
                 "battery-level-20-symbolic",
             ),
             (
                 PowerPreset::Balanced,
                 "Balanced",
-                "Dynamic schedutil/scx_bpfland scaling for daily responsive desktop performance",
+                "Dynamic schedutil scaling and BORE scheduler for daily responsive desktop performance",
                 "power-profile-balanced-symbolic",
             ),
             (
                 PowerPreset::LowLatency,
                 "Low-Latency / Workstation",
-                "Prioritizes frame pacing, interactive responsiveness, and scx_lavd low-latency mode",
+                "Prioritizes interactive responsiveness, BORE scheduler, and performance governor",
                 "speedometer-symbolic",
             ),
             (
                 PowerPreset::Gaming,
                 "Max Performance / Gaming",
-                "Maximum clocks, turbo boost unlocked, scx_flash gaming scheduler, EPP performance",
+                "Maximum clocks, Turbo Boost unlocked, BORE scheduler, and EPP performance",
                 "applications-games-symbolic",
             ),
         ];
@@ -118,11 +97,11 @@ impl KernelPowerPage {
         page.add(&preset_group);
 
         // ---------------------------------------------------------
-        // 2. Kernel & CachyOS / sched-ext Scheduler Group
+        // 2. Kernel & CachyOS BORE Scheduler Group
         // ---------------------------------------------------------
         let sched_group = PreferencesGroup::builder()
             .title("Kernel &amp; CPU Schedulers")
-            .description("CachyOS BORE and sched-ext (SCX) userspace BPF scheduler configuration")
+            .description("CachyOS BORE and kernel CPU scheduler configuration")
             .build();
 
         // Host Kernel Info Row
@@ -133,8 +112,8 @@ impl KernelPowerPage {
                 kinfo.kernel_release,
                 if kinfo.is_cachyos {
                     "CachyOS Optimized"
-                } else if kinfo.scx_supported {
-                    "sched-ext BPF Enabled"
+                } else if kinfo.bore_supported {
+                    "BORE Scheduler Available"
                 } else {
                     "Standard Linux"
                 }
@@ -189,314 +168,6 @@ impl KernelPowerPage {
             }
         });
         sched_group.add(&bore_switch);
-
-        // SCX Pluggable Scheduler ComboRow
-        let mut initial_scx_schedulers = vec!["none".to_string()];
-        initial_scx_schedulers.extend(kinfo.supported_scx_schedulers.clone());
-        let scx_sched_list: Rc<RefCell<Vec<String>>> =
-            Rc::new(RefCell::new(initial_scx_schedulers.clone()));
-
-        let scx_model = StringList::new(
-            &initial_scx_schedulers
-                .iter()
-                .map(|s| s.as_str())
-                .collect::<Vec<_>>(),
-        );
-        let current_scx_idx = initial_scx_schedulers
-            .iter()
-            .position(|s| s == &kinfo.scx_active_scheduler)
-            .unwrap_or(0) as u32;
-
-        let scx_row = ComboRow::builder()
-            .title("sched-ext (SCX) Pluggable Scheduler")
-            .subtitle(scx::scheduler_description(&kinfo.scx_active_scheduler))
-            .use_markup(false)
-            .model(&scx_model)
-            .selected(current_scx_idx)
-            .sensitive(!kinfo.supported_scx_schedulers.is_empty())
-            .build();
-        scx_row.add_prefix(&Image::from_icon_name("system-run-symbolic"));
-        sched_group.add(&scx_row);
-
-        // SCX Operating Mode ComboRow
-        let mode_labels: Vec<&str> = scx::ScxMode::all().iter().map(|m| m.label()).collect();
-        let mode_model = StringList::new(&mode_labels);
-        let initial_mode_idx = (kinfo.scx_mode as usize).min(mode_labels.len().saturating_sub(1)) as u32;
-
-        let scx_mode_row = ComboRow::builder()
-            .title("sched-ext (SCX) Operating Profile Mode")
-            .subtitle("Tuning profile passed to org.scx.Loader / scxctl / scx_* daemon flags")
-            .use_markup(false)
-            .model(&mode_model)
-            .selected(initial_mode_idx)
-            .sensitive(!kinfo.supported_scx_schedulers.is_empty())
-            .build();
-        scx_mode_row.add_prefix(&Image::from_icon_name("speedometer-symbolic"));
-        
-        sched_group.add(&scx_mode_row);
-
-        // SCX Kernel & Package Status + One-Click Installer Row
-        let scx_status_row = ActionRow::builder()
-            .title("sched-ext (SCX) Status &amp; Package Manager")
-            .subtitle(Self::format_scx_status_subtitle(&kinfo))
-            .use_markup(false)
-            .build();
-        scx_status_row.add_prefix(&Image::from_icon_name("software-update-available-symbolic"));
-
-        let scx_action_box = GtkBox::new(Orientation::Horizontal, 8);
-        scx_action_box.set_valign(Align::Center);
-
-        let refresh_scx_btn = Button::builder()
-            .icon_name("view-refresh-symbolic")
-            .tooltip_text("Refresh sched-ext status and installed schedulers")
-            .valign(Align::Center)
-            .build();
-        refresh_scx_btn.add_css_class("flat");
-
-        let install_btn_label = if kinfo.supported_scx_schedulers.is_empty() {
-            "Install SCX"
-        } else {
-            "Update SCX"
-        };
-        let install_scx_content = ButtonContent::builder()
-            .icon_name("system-software-install-symbolic")
-            .label(install_btn_label)
-            .build();
-        let install_scx_btn = Button::builder()
-            .child(&install_scx_content)
-            .tooltip_text("Install or update sched-ext (scx) packages for your Linux distribution")
-            .valign(Align::Center)
-            .build();
-        if kinfo.supported_scx_schedulers.is_empty() {
-            install_scx_btn.add_css_class("suggested-action");
-        }
-
-        scx_action_box.append(&refresh_scx_btn);
-        scx_action_box.append(&install_scx_btn);
-        scx_status_row.add_suffix(&scx_action_box);
-        sched_group.add(&scx_status_row);
-
-        // Wire SCX Scheduler & Mode selection handlers
-        let scx_list_for_sched = scx_sched_list.clone();
-        let toast_rc_scx = toast_overlay_rc.clone();
-        let scx_mode_for_sched = scx_mode_row.clone();
-        let scx_status_for_sched = scx_status_row.clone();
-        let updating_scx = updating_ui.clone();
-        scx_row.connect_selected_notify(move |row| {
-            let idx = row.selected() as usize;
-            let list = scx_list_for_sched.borrow();
-            if idx < list.len() {
-                let chosen = &list[idx];
-                row.set_subtitle(scx::scheduler_description(chosen));
-                if updating_scx.get() {
-                    return;
-                }
-                let mode_val = scx_mode_for_sched.selected();
-                if chosen == "none" {
-                    match scx::stop_scheduler() {
-                        Ok(_) => {
-                            if let Some(ref overlay) = *toast_rc_scx {
-                                overlay.add_toast(Toast::new(
-                                    "Stopped sched-ext scheduler (reverted to kernel EEVDF/BORE)",
-                                ));
-                            }
-                        }
-                        Err(e) => {
-                            if let Some(ref overlay) = *toast_rc_scx {
-                                overlay.add_toast(Toast::new(&format!(
-                                    "Failed to stop SCX: {}",
-                                    e
-                                )));
-                            }
-                        }
-                    }
-                } else {
-                    match scx::switch_scheduler(chosen, mode_val) {
-                        Ok(_) => {
-                            let mode_label = scx::ScxMode::from_u32(mode_val).label();
-                            if let Some(ref overlay) = *toast_rc_scx {
-                                overlay.add_toast(Toast::new(&if scx::is_scx_supported() { format!("Switched live scheduler to {} ({})", chosen, mode_label) } else { format!("Configured {} ({}) for next boot into SCX kernel", chosen, mode_label) }));
-                            }
-                        }
-                        Err(e) => {
-                            if let Some(ref overlay) = *toast_rc_scx {
-                                overlay.add_toast(Toast::new(&format!(
-                                    "Failed to switch SCX: {}",
-                                    e
-                                )));
-                            }
-                        }
-                    }
-                }
-                let latest = detect_kernel();
-                scx_status_for_sched.set_subtitle(&Self::format_scx_status_subtitle(&latest));
-            }
-        });
-
-        let scx_list_for_mode = scx_sched_list.clone();
-        let scx_row_for_mode = scx_row.clone();
-        let scx_status_for_mode = scx_status_row.clone();
-        let toast_rc_mode = toast_overlay_rc.clone();
-        let updating_mode = updating_ui.clone();
-        scx_mode_row.connect_selected_notify(move |mode_row| {
-            if updating_mode.get() {
-                return;
-            }
-            let sched_idx = scx_row_for_mode.selected() as usize;
-            let list = scx_list_for_mode.borrow();
-            if sched_idx < list.len() {
-                let chosen = &list[sched_idx];
-                if chosen != "none" {
-                    let mode_val = mode_row.selected();
-                    let mode_label = scx::ScxMode::from_u32(mode_val).label();
-                    match scx::switch_scheduler(chosen, mode_val) {
-                        Ok(_) => {
-                            if let Some(ref overlay) = *toast_rc_mode {
-                                overlay.add_toast(Toast::new(&format_applied_mode(
-                                    chosen, mode_label,
-                                )));
-                            }
-                        }
-                        Err(e) => {
-                            if let Some(ref overlay) = *toast_rc_mode {
-                                overlay.add_toast(Toast::new(&format!(
-                                    "Failed to apply SCX mode: {}",
-                                    e
-                                )));
-                            }
-                        }
-                    }
-                    let latest = detect_kernel();
-                    scx_status_for_mode.set_subtitle(&Self::format_scx_status_subtitle(&latest));
-                }
-            }
-        });
-
-        // Helper closure to refresh SCX widgets from live system state
-        let refresh_scx_widgets = {
-            let scx_sched_list = scx_sched_list.clone();
-            let scx_row = scx_row.clone();
-            let scx_mode_row = scx_mode_row.clone();
-            let scx_status_row = scx_status_row.clone();
-            let install_scx_btn = install_scx_btn.clone();
-            let install_scx_content = install_scx_content.clone();
-            let updating_ui = updating_ui.clone();
-            Rc::new(move || {
-                let latest = detect_kernel();
-                updating_ui.set(true);
-
-                let mut new_scheds = vec!["none".to_string()];
-                new_scheds.extend(latest.supported_scx_schedulers.clone());
-                *scx_sched_list.borrow_mut() = new_scheds.clone();
-
-                let new_model = StringList::new(
-                    &new_scheds.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
-                );
-                scx_row.set_model(Some(&new_model));
-
-                let idx = new_scheds
-                    .iter()
-                    .position(|s| s == &latest.scx_active_scheduler)
-                    .unwrap_or(0) as u32;
-                scx_row.set_selected(idx);
-                scx_row.set_subtitle(scx::scheduler_description(&latest.scx_active_scheduler));
-                let can_use_scx = !latest.supported_scx_schedulers.is_empty();
-                scx_row.set_sensitive(can_use_scx);
-                scx_mode_row.set_sensitive(can_use_scx);
-                scx_mode_row.set_selected((latest.scx_mode as usize).min(4) as u32);
-                scx_status_row.set_subtitle(&Self::format_scx_status_subtitle(&latest));
-
-                if latest.supported_scx_schedulers.is_empty() {
-                    install_scx_content.set_label("Install SCX");
-                    install_scx_btn.add_css_class("suggested-action");
-                } else {
-                    install_scx_content.set_label("Update SCX");
-                    install_scx_btn.remove_css_class("suggested-action");
-                }
-
-                updating_ui.set(false);
-            })
-        };
-
-        let refresh_cb = refresh_scx_widgets.clone();
-        let toast_rc_refresh = toast_overlay_rc.clone();
-        refresh_scx_btn.connect_clicked(move |_| {
-            refresh_cb();
-            if let Some(ref overlay) = *toast_rc_refresh {
-                overlay.add_toast(Toast::new("Refreshed sched-ext kernel & package status"));
-            }
-        });
-
-        let refresh_after_install = refresh_scx_widgets.clone();
-        let status_row_install = scx_status_row.clone();
-        let install_btn_clone = install_scx_btn.clone();
-        let install_content_clone = install_scx_content.clone();
-        let toast_rc_install = toast_overlay_rc.clone();
-        install_scx_btn.connect_clicked(move |_| {
-            install_btn_clone.set_sensitive(false);
-            install_content_clone.set_label("Installing...");
-            status_row_install.set_subtitle("Starting sched-ext package installation via Polkit...");
-
-            enum InstallMsg {
-                Line(String),
-                Done(Result<scx::ScxInstallPlan, String>),
-            }
-
-            let (tx, rx) = std::sync::mpsc::channel::<InstallMsg>();
-            std::thread::spawn(move || {
-                let tx_line = tx.clone();
-                let res = scx::install_scx_streaming(move |line| {
-                    let _ = tx_line.send(InstallMsg::Line(line));
-                });
-                let _ = tx.send(InstallMsg::Done(res));
-            });
-
-            let status_row_poll = status_row_install.clone();
-            let install_btn_poll = install_btn_clone.clone();
-            let refresh_poll = refresh_after_install.clone();
-            let toast_poll = toast_rc_install.clone();
-
-            gtk4::glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
-                while let Ok(msg) = rx.try_recv() {
-                    match msg {
-                        InstallMsg::Line(line) => {
-                            let clean = line.trim();
-                            if !clean.is_empty() {
-                                status_row_poll.set_subtitle(clean);
-                            }
-                        }
-                        InstallMsg::Done(res) => {
-                            install_btn_poll.set_sensitive(true);
-                            refresh_poll();
-                            match res {
-                                Ok(plan) => {
-                                    let note = if plan.requires_reboot_for_kernel
-                                        && !scx::is_scx_supported()
-                                    {
-                                        "sched-ext installed! Reboot into the new sched-ext enabled kernel to activate."
-                                    } else {
-                                        "sched-ext (SCX) schedulers installed and ready!"
-                                    };
-                                    if let Some(ref overlay) = *toast_poll {
-                                        overlay.add_toast(Toast::new(note));
-                                    }
-                                }
-                                Err(e) => {
-                                    if let Some(ref overlay) = *toast_poll {
-                                        overlay.add_toast(Toast::new(&format!(
-                                            "SCX installation failed: {}",
-                                            e
-                                        )));
-                                    }
-                                }
-                            }
-                            return gtk4::glib::ControlFlow::Break;
-                        }
-                    }
-                }
-                gtk4::glib::ControlFlow::Continue
-            });
-        });
 
         page.add(&sched_group);
 
@@ -714,7 +385,6 @@ impl KernelPowerPage {
             let preset = *preset;
             let all_btns = preset_btns.clone();
             let toast_rc = toast_overlay_rc.clone();
-            let refresh_scx = refresh_scx_widgets.clone();
             let updating_preset = updating_ui.clone();
             let bore_sw = bore_switch.clone();
             let gov_r = gov_row.clone();
@@ -738,7 +408,6 @@ impl KernelPowerPage {
                         }
 
                         // Refresh all widgets on KernelPowerPage to match live system state
-                        refresh_scx();
                         updating_preset.set(true);
                         if let Some(b_state) = bore::get_bore_state() {
                             bore_sw.set_active(b_state);
@@ -788,7 +457,7 @@ impl KernelPowerPage {
         // Save tunables button
         let persist_row = ActionRow::builder()
             .title("Save State as Default Across Boots")
-            .subtitle("Writes configuration to /etc/sysctl.d/99-mithrandir-scheduler.conf and /etc/scx_loader/config.toml")
+            .subtitle("Writes configuration to /etc/sysctl.d/99-mithrandir-scheduler.conf")
             .use_markup(false)
             .build();
         persist_row.add_prefix(&Image::from_icon_name("document-save-symbolic"));
@@ -800,9 +469,6 @@ impl KernelPowerPage {
 
         let toast_rc_persist = toast_overlay_rc.clone();
         let bore_switch_clone = bore_switch.clone();
-        let scx_row_clone = scx_row.clone();
-        let scx_mode_clone = scx_mode_row.clone();
-        let scx_list_persist = scx_sched_list.clone();
         let gov_row_clone = gov_row.clone();
         let epp_row_clone = epp_row.clone();
         let turbo_switch_clone = turbo_switch.clone();
@@ -818,10 +484,6 @@ impl KernelPowerPage {
             let a_idx = aspm_row_clone.selected() as usize;
             let a_val = aspm_policies.get(a_idx).map(|s| s.to_string());
 
-            let scx_idx = scx_row_clone.selected() as usize;
-            let selected_scx = scx_list_persist.borrow().get(scx_idx).cloned();
-            let selected_mode = scx::ScxMode::from_u32(scx_mode_clone.selected());
-
             let res = run_privileged_helper(
                 Some(b_val),
                 g_val.as_deref(),
@@ -829,21 +491,13 @@ impl KernelPowerPage {
                 Some(t_val),
                 a_val.as_deref(),
                 true,
-            )
-            .and_then(|_| {
-                if let Some(ref sched) = selected_scx {
-                    if scx::is_scx_supported() {
-                        let _ = scx::set_scx_boot_persistence(sched, selected_mode);
-                    }
-                }
-                Ok(())
-            });
+            );
 
             match res {
                 Ok(_) => {
                     if let Some(ref overlay) = *toast_rc_persist {
                         overlay.add_toast(Toast::new(
-                            "Kernel, SCX & power settings persisted successfully",
+                            "Kernel & power settings persisted successfully",
                         ));
                     }
                 }
@@ -866,8 +520,4 @@ impl KernelPowerPage {
         scroller.set_child(Some(&page));
         scroller
     }
-}
-
-fn format_applied_mode(scheduler: &str, mode_label: &str) -> String {
-    format!("Applied {} mode to {}", mode_label, scheduler)
 }

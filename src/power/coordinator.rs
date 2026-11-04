@@ -1,4 +1,4 @@
-use crate::kernel::{bore, scx};
+use crate::kernel::bore;
 use crate::power::profiles;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -47,7 +47,7 @@ pub fn set_active_preset(preset: PowerPreset) {
 
 /// Applies a complete Mithrandir power & kernel scheduler preset.
 pub fn apply_preset(preset: PowerPreset) -> Result<(), String> {
-    let (ppd_profile, governor, epp, boost, aspm, bore_val, scx_sched, scx_mode) = match preset {
+    let (ppd_profile, governor, epp, boost, aspm, bore_val) = match preset {
         PowerPreset::Battery => (
             "power-saver",
             "powersave",
@@ -55,8 +55,6 @@ pub fn apply_preset(preset: PowerPreset) -> Result<(), String> {
             false,
             "powersupersave",
             false,
-            "scx_lavd",
-            scx::ScxMode::PowerSave.as_u32(),
         ),
         PowerPreset::Balanced => (
             "balanced",
@@ -65,8 +63,6 @@ pub fn apply_preset(preset: PowerPreset) -> Result<(), String> {
             true,
             "default",
             true,
-            "scx_bpfland",
-            scx::ScxMode::Auto.as_u32(),
         ),
         PowerPreset::LowLatency => (
             "performance",
@@ -75,8 +71,6 @@ pub fn apply_preset(preset: PowerPreset) -> Result<(), String> {
             true,
             "default",
             true,
-            "scx_lavd",
-            scx::ScxMode::LowLatency.as_u32(),
         ),
         PowerPreset::Gaming => (
             "performance",
@@ -85,27 +79,13 @@ pub fn apply_preset(preset: PowerPreset) -> Result<(), String> {
             true,
             "default",
             true,
-            "scx_flash",
-            scx::ScxMode::Gaming.as_u32(),
         ),
     };
 
     // 1. power-profiles-daemon (unprivileged D-Bus call)
     let _ = profiles::set_power_profiles_daemon_profile(ppd_profile);
 
-    // 2. SCX Scheduler switch (via D-Bus or scxctl)
-    if scx::is_scx_supported() {
-        let (_active_mode, supported) = scx::get_scx_info();
-        if supported.iter().any(|s| s == scx_sched) {
-            let _ = scx::switch_scheduler(scx_sched, scx_mode);
-        } else if let Some(first_avail) = supported.first() {
-            let _ = scx::switch_scheduler(first_avail, scx_mode);
-        } else if preset == PowerPreset::Balanced {
-            let _ = scx::stop_scheduler();
-        }
-    }
-
-    // 3. Hardware Tunables (sysfs & procfs)
+    // 2. Hardware Tunables (sysfs & procfs)
     // Attempt direct write first
     let mut needs_privileged_helper = false;
 
