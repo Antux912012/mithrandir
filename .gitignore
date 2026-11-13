@@ -7,4 +7,5 @@ pkg-deb/usr/
 *.flatpak
 *.AppImage
 *.deb
+*.rpm
 .env

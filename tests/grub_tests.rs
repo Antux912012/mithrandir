@@ -103,3 +103,111 @@ GRUB_CMDLINE_LINUX=""
     assert!(populated.contains("GRUB_DEFAULT=\"saved\""));
     assert!(populated.contains("GRUB_DISTRIBUTOR=\"Custom\""));
 }
+
+#[test]
+fn test_distro_aware_grub_strategy_selection() {
+    use mithrandir::backend::distro::DistroFamily;
+    use mithrandir::backend::grub::GrubStrategy;
+    use mithrandir::os_info::{parse_os_release, LinuxDistro};
+
+    // Gentoo & OpenMandriva detection
+    let gentoo = parse_os_release("ID=gentoo\nPRETTY_NAME=\"Gentoo Linux\"\n");
+    assert_eq!(gentoo.distro, LinuxDistro::Gentoo);
+    assert_eq!(DistroFamily::from(gentoo.distro), DistroFamily::Gentoo);
+
+    let mandriva = parse_os_release("ID=openmandriva\nPRETTY_NAME=\"OpenMandriva Lx\"\n");
+    assert_eq!(mandriva.distro, LinuxDistro::Mandriva);
+    assert_eq!(DistroFamily::from(mandriva.distro), DistroFamily::Mandriva);
+
+    // Debian/Ubuntu with /etc/default/grub.d -> DropIn
+    let deb = GrubManager::select_strategy_for(
+        DistroFamily::Debian,
+        false,
+        true,
+        false,
+        false,
+        true,
+        false,
+        Some("update-grub".to_string()),
+    );
+    assert_eq!(deb.strategy, GrubStrategy::DropIn);
+
+    // Fedora with BLS + grubby -> FedoraBlsGrubby
+    let fed = GrubManager::select_strategy_for(
+        DistroFamily::Fedora,
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        Some("grub2-mkconfig".to_string()),
+    );
+    assert_eq!(fed.strategy, GrubStrategy::FedoraBlsGrubby);
+
+    // Arch / Gentoo / openSUSE -> DirectDefaultGrub
+    for fam in [DistroFamily::Arch, DistroFamily::Gentoo, DistroFamily::Suse] {
+        let plan = GrubManager::select_strategy_for(
+            fam,
+            false,
+            false,
+            false,
+            false,
+            true,
+            false,
+            Some("grub-mkconfig".to_string()),
+        );
+        assert_eq!(plan.strategy, GrubStrategy::DirectDefaultGrub);
+    }
+
+    // Immutable OS or systemd-boot without GRUB -> UnsupportedBootloader
+    let imm = GrubManager::select_strategy_for(
+        DistroFamily::Unknown,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        None,
+    );
+    assert_eq!(imm.strategy, GrubStrategy::UnsupportedBootloader);
+
+    let sd_boot = GrubManager::select_strategy_for(
+        DistroFamily::Arch,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        None,
+    );
+    assert_eq!(sd_boot.strategy, GrubStrategy::UnsupportedBootloader);
+}
+
+#[test]
+fn test_grub_input_validation_and_dropin_and_host_path() {
+    use mithrandir::backend::host_bridge::HostBridge;
+
+    assert!(GrubManager::validate_grub_inputs(5, "0", Some("quiet splash")).is_ok());
+    assert!(GrubManager::validate_grub_inputs(-1, "saved", None).is_ok());
+    assert!(GrubManager::validate_grub_inputs(4000, "0", None).is_err());
+    assert!(GrubManager::validate_grub_inputs(5, "0\" ; rm -rf /", None).is_err());
+    assert!(GrubManager::validate_grub_inputs(5, "0", Some("quiet $(id)")).is_err());
+    assert!(GrubManager::validate_grub_inputs(5, "0", Some("quiet\nsplash")).is_err());
+
+    let dropin = GrubManager::build_dropin_content(5, "0", Some("quiet splash"));
+    assert!(dropin.contains("GRUB_TIMEOUT=5"));
+    assert!(dropin.contains("GRUB_DEFAULT=\"0\""));
+    assert!(dropin.contains("GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash\""));
+
+    assert_eq!(
+        HostBridge::host_path(Path::new("/run/host/etc/default/grub")),
+        "/etc/default/grub"
+    );
+    assert_eq!(
+        HostBridge::host_path(Path::new("/boot/grub/grub.cfg")),
+        "/boot/grub/grub.cfg"
+    );
+}

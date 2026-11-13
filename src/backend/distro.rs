@@ -7,6 +7,8 @@ pub enum DistroFamily {
     Fedora,
     Arch,
     Suse,
+    Gentoo,
+    Mandriva,
     Alpine,
     Unknown,
 }
@@ -18,6 +20,8 @@ impl From<LinuxDistro> for DistroFamily {
             LinuxDistro::Fedora => DistroFamily::Fedora,
             LinuxDistro::Arch | LinuxDistro::CachyOS => DistroFamily::Arch,
             LinuxDistro::OpenSuse => DistroFamily::Suse,
+            LinuxDistro::Gentoo => DistroFamily::Gentoo,
+            LinuxDistro::Mandriva => DistroFamily::Mandriva,
             LinuxDistro::Alpine => DistroFamily::Alpine,
             LinuxDistro::NixOS | LinuxDistro::Unknown => DistroFamily::Unknown,
         }

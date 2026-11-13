@@ -1,4 +1,4 @@
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -62,9 +62,54 @@ impl HostBridge {
         Ok((code, stdout, stderr))
     }
 
+    /// Translates a possibly Flatpak-prefixed `/run/host/...` path into a host OS path.
+    pub fn host_path(path: &Path) -> String {
+        let s = path.to_string_lossy();
+        if let Some(stripped) = s.strip_prefix("/run/host") {
+            if stripped.is_empty() {
+                "/".to_string()
+            } else {
+                stripped.to_string()
+            }
+        } else {
+            s.to_string()
+        }
+    }
+
     /// Executes a command via Polkit pkexec for privilege elevation.
     pub fn run_privileged(args: &[&str]) -> Result<(i32, String, String), String> {
         Self::run_command("pkexec", args)
+    }
+
+    /// Executes a command via Polkit pkexec while piping `stdin_data` to its standard input.
+    pub fn run_privileged_with_stdin(
+        args: &[&str],
+        stdin_data: &str,
+    ) -> Result<(i32, String, String), String> {
+        let mut command = Self::wrap_command("pkexec", args);
+        command.stdin(Stdio::piped());
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+
+        let mut child = command
+            .spawn()
+            .map_err(|e| format!("Failed to spawn privileged command: {}", e))?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(stdin_data.as_bytes())
+                .map_err(|e| format!("Failed to write stdin to privileged command: {}", e))?;
+        }
+
+        let output = child
+            .wait_with_output()
+            .map_err(|e| format!("Failed waiting for privileged command: {}", e))?;
+
+        let code = output.status.code().unwrap_or(-1);
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        Ok((code, stdout, stderr))
     }
 
     /// Spawns a process and streams merged stdout and stderr line-by-line into a callback.

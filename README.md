@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.2.1-brightgreen.svg" alt="Version" /></a>
+  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.3.0-brightgreen.svg" alt="Version" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later" /></a>
   <a href="https://gtk.org/"><img src="https://img.shields.io/badge/GUI-GTK%204%20%7C%20Libadwaita-brightgreen.svg" alt="GTK4 & Libadwaita" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.80%2B-informational.svg" alt="Rust 1.80+" /></a>
@@ -109,7 +109,7 @@ Pre-built standalone packages are ready in the repository root:
 ### Flatpak Bundle (`.flatpak`)
 Install the sandboxed single-file bundle:
 ```bash
-flatpak install --user mithrandir_1.2.1.flatpak
+flatpak install --user mithrandir_1.3.0.flatpak
 ```
 Run via Flatpak:
 ```bash
@@ -118,19 +118,19 @@ flatpak run io.github.antux912012.Mithrandir
 
 ### Debian / Ubuntu Package (`.deb`)
 ```bash
-sudo dpkg -i mithrandir_1.2.1_amd64.deb
+sudo dpkg -i mithrandir_1.3.0_amd64.deb
 ```
 
 ### Fedora / RHEL / openSUSE Package (`.rpm`)
 ```bash
-sudo dnf install ./mithrandir-1.2.1-1.x86_64.rpm
+sudo dnf install ./mithrandir-1.3.0-1.x86_64.rpm
 ```
 
 ### AppImage (`.AppImage`)
 Run instantly on any modern GNU/Linux distribution:
 ```bash
-chmod +x ./mithrandir-1.2.1-x86_64.AppImage
-./mithrandir-1.2.1-x86_64.AppImage
+chmod +x ./mithrandir-1.3.0-x86_64.AppImage
+./mithrandir-1.3.0-x86_64.AppImage
 ```
 
 ### Arch Linux / CachyOS (AUR)

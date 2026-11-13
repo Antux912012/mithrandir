@@ -103,7 +103,7 @@ if [ -z "${REL_ID}" ]; then
 - Removed \`sched-ext\` (SCX) scheduler management and bundled SCX packages to streamline kernel & power management around BORE (\`sched_bore\`), CPU scaling governors, EPP, Turbo Boost, and PCIe ASPM.
 - Updated AppStream 1.0 MetaInfo (\`io.github.antux912012.Mithrandir.metainfo.xml\`) and Flatpak packaging to comply with Flathub submission standards.
 - Reduced Flatpak and AppImage package footprint."
-  CREATE_JSON=$(python3 -c 'import json, sys; print(json.dumps({"tag_name": sys.argv[1], "name": f"Mithrandir {sys.argv[1]}", "body": sys.argv[2], "draft": False, "prerelease": False}))' "${TAG}" "${REL_BODY}")
+  CREATE_JSON=$(python3 -c 'import json, sys; print(json.dumps({"tag_name": sys.argv[1], "name": f"Mithrandir {sys.argv[1]}", "body": sys.argv[2], "draft": True, "prerelease": False}))' "${TAG}" "${REL_BODY}")
   REL_RESP=$(curl -s -X POST \
     -H "Authorization: Bearer ${GITHUB_TOKEN}" \
     -H "Accept: application/vnd.github+json" \
@@ -113,7 +113,11 @@ if [ -z "${REL_ID}" ]; then
 fi
 
 if [ -n "${REL_ID}" ]; then
-  for asset in "${ROOT_DIR}/mithrandir_${VERSION}.flatpak" "${ROOT_DIR}/mithrandir_${VERSION}_amd64.deb" "${ROOT_DIR}/mithrandir-${VERSION}-x86_64.AppImage"; do
+  for asset in \
+    "${ROOT_DIR}/mithrandir_${VERSION}.flatpak" \
+    "${ROOT_DIR}/mithrandir_${VERSION}_amd64.deb" \
+    "${ROOT_DIR}/mithrandir-${VERSION}-1.x86_64.rpm" \
+    "${ROOT_DIR}/mithrandir-${VERSION}-x86_64.AppImage"; do
     if [ -f "${asset}" ]; then
       fname=$(basename "${asset}")
       echo "==> Uploading release asset: ${fname}..."
@@ -141,6 +145,13 @@ for a in d.get("assets", []):
       echo "    Uploaded ${fname} successfully."
     fi
   done
+
+  echo "==> Publishing GitHub Release ${TAG} (draft: false)..."
+  curl -s -X PATCH \
+    -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/${USER_LOGIN}/${REPO_NAME}/releases/${REL_ID}" \
+    -d '{"draft": false}' >/dev/null
 fi
 
 echo "==> Successfully published ${TAG} to: https://github.com/${USER_LOGIN}/${REPO_NAME}/releases/tag/${TAG}"

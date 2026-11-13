@@ -1,7 +1,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
+use crate::backend::distro::{DistroDetector, DistroFamily};
 use crate::backend::host_bridge::HostBridge;
+use crate::os_info::is_immutable_system;
+
+pub const MITHRANDIR_DROPIN_FILENAME: &str = "99-mithrandir.cfg";
 
 pub const GRUB_CFG_CANDIDATES: &[&str] = &[
     "/boot/grub/grub.cfg",
@@ -36,6 +40,26 @@ pub const GRUB_DEFAULT_D_CANDIDATES: &[&str] = &[
     "/run/host/etc/default/grub.d",
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GrubStrategy {
+    /// Writes an isolated `/etc/default/grub.d/99-mithrandir.cfg` drop-in (Debian/Ubuntu/derivatives).
+    DropIn,
+    /// Uses `grubby` for BLS kernel entries/cmdline + `/etc/default/grub` for timeout (Fedora/RHEL/OpenMandriva BLS).
+    FedoraBlsGrubby,
+    /// Hardened atomic update of `/etc/default/grub` with `.bak` snapshot (Arch, CachyOS, Gentoo, openSUSE, Mandriva).
+    DirectDefaultGrub,
+    /// Immutable OS (NixOS/OSTree) or non-GRUB bootloader (e.g. systemd-boot).
+    UnsupportedBootloader,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GrubStrategyPlan {
+    pub strategy: GrubStrategy,
+    pub family: DistroFamily,
+    pub mkconfig_cmd: Option<String>,
+    pub label: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GrubLiveStatus {
     pub cfg_path: String,
@@ -57,6 +81,8 @@ pub struct GrubLiveStatus {
     pub default_backup_modified_time: String,
     pub default_dropins_dir: Option<String>,
     pub default_dropins_count: usize,
+    #[serde(default)]
+    pub strategy_label: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,6 +186,7 @@ impl GrubManager {
         let dropins_dir = Self::detect_default_grub_d_dir();
         let default_dropins_count = dropins_dir.as_ref().map(|d| Self::count_default_dropins(d)).unwrap_or(0);
         let default_dropins_dir = dropins_dir.map(|d| d.to_string_lossy().to_string());
+        let strategy_label = Self::detect_strategy_plan().label;
 
         GrubLiveStatus {
             cfg_path: cfg_path.to_string_lossy().to_string(),
@@ -181,6 +208,7 @@ impl GrubManager {
             default_backup_modified_time,
             default_dropins_dir,
             default_dropins_count,
+            strategy_label,
         }
     }
 
@@ -310,6 +338,223 @@ impl GrubManager {
         kernels
     }
 
+    /// Checks if BootLoaderSpec (BLS) is enabled via /etc/default/grub or /boot/loader/entries.
+    pub fn is_bls_enabled(default_grub_content: &str) -> bool {
+        let bls_flag = default_grub_content.lines().any(|line| {
+            let trimmed = line.trim();
+            trimmed == "GRUB_ENABLE_BLSCFG=true"
+                || trimmed == "GRUB_ENABLE_BLSCFG=\"true\""
+                || trimmed == "GRUB_ENABLE_BLSCFG='true'"
+        });
+        bls_flag
+            || Path::new("/boot/loader/entries").is_dir()
+            || Path::new("/run/host/boot/loader/entries").is_dir()
+    }
+
+    /// Checks whether systemd-boot appears to be the active bootloader without GRUB.
+    pub fn detect_systemd_boot_without_grub(has_grub_cfg: bool) -> bool {
+        !has_grub_cfg
+            && (Path::new("/boot/efi/loader/entries").is_dir()
+                || Path::new("/boot/loader/entries").is_dir()
+                || Path::new("/run/host/boot/efi/loader/entries").is_dir()
+                || Path::new("/run/host/boot/loader/entries").is_dir())
+    }
+
+    /// Detects the preferred GRUB config generator binary on the host.
+    pub fn detect_mkconfig_cmd(family: DistroFamily) -> Option<String> {
+        let candidates: &[&str] = match family {
+            DistroFamily::Debian => &["update-grub", "grub-mkconfig", "grub2-mkconfig"],
+            DistroFamily::Fedora | DistroFamily::Suse | DistroFamily::Mandriva => {
+                &["grub2-mkconfig", "grub-mkconfig", "update-grub"]
+            }
+            DistroFamily::Arch | DistroFamily::Gentoo | DistroFamily::Alpine | DistroFamily::Unknown => {
+                &["grub-mkconfig", "grub2-mkconfig", "update-grub"]
+            }
+        };
+
+        for bin in candidates {
+            if HostBridge::which(bin).is_some() {
+                return Some((*bin).to_string());
+            }
+        }
+        None
+    }
+
+    /// Pure strategy selector combining distro family with runtime bootloader capabilities.
+    pub fn select_strategy_for(
+        family: DistroFamily,
+        immutable: bool,
+        has_dropin_dir: bool,
+        has_grubby: bool,
+        bls_enabled: bool,
+        has_grub_cfg: bool,
+        has_systemd_boot: bool,
+        mkconfig_cmd: Option<String>,
+    ) -> GrubStrategyPlan {
+        if immutable {
+            return GrubStrategyPlan {
+                strategy: GrubStrategy::UnsupportedBootloader,
+                family,
+                mkconfig_cmd,
+                label: "Immutable OS detected (declarative bootloader config required)".to_string(),
+            };
+        }
+
+        if has_systemd_boot && !has_grub_cfg {
+            return GrubStrategyPlan {
+                strategy: GrubStrategy::UnsupportedBootloader,
+                family,
+                mkconfig_cmd,
+                label: "systemd-boot detected (GRUB2 config inactive)".to_string(),
+            };
+        }
+
+        if matches!(family, DistroFamily::Fedora | DistroFamily::Mandriva) && has_grubby && bls_enabled {
+            return GrubStrategyPlan {
+                strategy: GrubStrategy::FedoraBlsGrubby,
+                family,
+                mkconfig_cmd,
+                label: format!("{:?} BLS + grubby + grub2-mkconfig", family),
+            };
+        }
+
+        if has_dropin_dir && matches!(family, DistroFamily::Debian | DistroFamily::Unknown) {
+            return GrubStrategyPlan {
+                strategy: GrubStrategy::DropIn,
+                family,
+                mkconfig_cmd,
+                label: format!("Drop-in (/etc/default/grub.d/{})", MITHRANDIR_DROPIN_FILENAME),
+            };
+        }
+
+        GrubStrategyPlan {
+            strategy: GrubStrategy::DirectDefaultGrub,
+            family,
+            mkconfig_cmd,
+            label: format!("{:?} hardened /etc/default/grub + .bak snapshot", family),
+        }
+    }
+
+    /// Probes the active host OS and bootloader capabilities to choose the safest GRUB strategy.
+    pub fn detect_strategy_plan() -> GrubStrategyPlan {
+        let distro = DistroDetector::detect();
+        let default_path = Self::detect_default_grub_path();
+        let default_content = fs::read_to_string(&default_path).unwrap_or_default();
+        let cfg_exists = Self::detect_grub_cfg_path().exists();
+        let has_dropin_dir = Self::detect_default_grub_d_dir().is_some();
+        let has_grubby = HostBridge::which("grubby").is_some();
+        let bls_enabled = Self::is_bls_enabled(&default_content);
+        let has_systemd_boot = Self::detect_systemd_boot_without_grub(cfg_exists);
+        let mkconfig_cmd = Self::detect_mkconfig_cmd(distro.family);
+
+        Self::select_strategy_for(
+            distro.family,
+            is_immutable_system(),
+            has_dropin_dir,
+            has_grubby,
+            bls_enabled,
+            cfg_exists,
+            has_systemd_boot,
+            mkconfig_cmd,
+        )
+    }
+
+    /// Validates GRUB parameter inputs before writing shell-sourced configuration files.
+    pub fn validate_grub_inputs(
+        timeout: i32,
+        default_entry: &str,
+        cmdline: Option<&str>,
+    ) -> Result<(), String> {
+        if !(-1..=3600).contains(&timeout) {
+            return Err(format!(
+                "Invalid GRUB_TIMEOUT {}: must be between -1 and 3600 seconds",
+                timeout
+            ));
+        }
+
+        for (field, val) in [("GRUB_DEFAULT", default_entry)]
+            .into_iter()
+            .chain(cmdline.map(|c| ("GRUB_CMDLINE_LINUX_DEFAULT", c)))
+        {
+            if val.contains('\n')
+                || val.contains('\r')
+                || val.contains('\0')
+                || val.contains('"')
+                || val.contains('`')
+                || val.contains("$(")
+            {
+                return Err(format!(
+                    "{} contains disallowed shell or control characters (newlines, quotes, backticks, or $())",
+                    field
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Builds an isolated `/etc/default/grub.d/99-mithrandir.cfg` drop-in file.
+    pub fn build_dropin_content(
+        timeout: i32,
+        default_entry: &str,
+        cmdline: Option<&str>,
+    ) -> String {
+        let mut lines = vec![
+            "# Managed by Mithrandir — delete this file and run update-grub to revert.".to_string(),
+            format!("GRUB_TIMEOUT={}", timeout),
+            format!("GRUB_DEFAULT=\"{}\"", default_entry),
+        ];
+        if let Some(cmd) = cmdline {
+            lines.push(format!("GRUB_CMDLINE_LINUX_DEFAULT=\"{}\"", cmd));
+        }
+        let mut out = lines.join("\n");
+        out.push('\n');
+        out
+    }
+
+    fn write_host_file_privileged(host_path: &str, content: &str) -> Result<(), String> {
+        let (code, stdout, stderr) = HostBridge::run_privileged_with_stdin(&["tee", host_path], content)?;
+        if code != 0 {
+            return Err(format!("Failed writing {} (code {}): {} {}", host_path, code, stdout, stderr).trim().to_string());
+        }
+        let (chmod_code, _, chmod_err) = HostBridge::run_privileged(&["chmod", "644", host_path])?;
+        if chmod_code != 0 {
+            return Err(format!("Failed setting permissions on {}: {}", host_path, chmod_err.trim()));
+        }
+        Ok(())
+    }
+
+    fn backup_host_file_if_missing(src_exists: bool, host_src: &str, host_bak: &str) -> Result<(), String> {
+        if !src_exists || Path::new(host_bak).exists() {
+            return Ok(());
+        }
+        let (code, stdout, stderr) = HostBridge::run_privileged(&["cp", "-p", host_src, host_bak])?;
+        if code != 0 {
+            return Err(format!("Failed creating backup {} (code {}): {} {}", host_bak, code, stdout, stderr).trim().to_string());
+        }
+        let _ = HostBridge::run_privileged(&["chmod", "644", host_bak]);
+        Ok(())
+    }
+
+    fn regenerate_grub_cfg(mkconfig_cmd: Option<&str>, host_cfg: &str) -> Result<(), String> {
+        let cmd = mkconfig_cmd.ok_or_else(|| {
+            "No GRUB generator (update-grub, grub2-mkconfig, or grub-mkconfig) found on host".to_string()
+        })?;
+
+        let (code, stdout, stderr) = match cmd {
+            "update-grub" => HostBridge::run_privileged(&["update-grub"])?,
+            "grub2-mkconfig" => HostBridge::run_privileged(&["grub2-mkconfig", "-o", host_cfg])?,
+            "grub-mkconfig" => HostBridge::run_privileged(&["grub-mkconfig", "-o", host_cfg])?,
+            other => HostBridge::run_privileged(&[other, "-o", host_cfg])?,
+        };
+
+        if code == 0 {
+            Ok(())
+        } else {
+            Err(format!("{} exited with code {}: {} {}", cmd, code, stdout, stderr).trim().to_string())
+        }
+    }
+
     /// Generates a backup of the active grub.cfg (grub.cfg.bak) and /etc/default/grub (/etc/default/grub.bak).
     pub fn create_backup() -> Result<String, String> {
         let cfg_path = Self::detect_grub_cfg_path();
@@ -317,109 +562,161 @@ impl GrubManager {
         let default_path = Self::detect_default_grub_path();
         let default_bak = Self::get_backup_path(&default_path);
 
-        let script = format!(
-            "mkdir -p \"$(dirname '{bak}')\" && mkdir -p \"$(dirname '{def_bak}')\" && \
-             if [ -f '{cfg}' ]; then cp -p '{cfg}' '{bak}' && chmod 644 '{bak}'; fi && \
-             if [ -f '{def}' ]; then cp -p '{def}' '{def_bak}' && chmod 644 '{def_bak}'; fi",
-            cfg = cfg_path.display(),
-            bak = backup_path.display(),
-            def = default_path.display(),
-            def_bak = default_bak.display(),
-        );
+        let host_cfg = HostBridge::host_path(&cfg_path);
+        let host_bak = HostBridge::host_path(&backup_path);
+        let host_def = HostBridge::host_path(&default_path);
+        let host_def_bak = HostBridge::host_path(&default_bak);
 
-        let (code, stdout, stderr) = HostBridge::run_privileged(&["sh", "-c", &script])?;
-        if code == 0 {
-            let mut backed_up = Vec::new();
-            if cfg_path.exists() {
-                backed_up.push(backup_path.display().to_string());
+        let mut backed_up = Vec::new();
+        if cfg_path.exists() {
+            let (code, stdout, stderr) = HostBridge::run_privileged(&["cp", "-p", &host_cfg, &host_bak])?;
+            if code != 0 {
+                return Err(format!("Backup of {} failed (code {}): {} {}", host_cfg, code, stdout, stderr).trim().to_string());
             }
-            if default_path.exists() {
-                backed_up.push(default_bak.display().to_string());
+            let _ = HostBridge::run_privileged(&["chmod", "644", &host_bak]);
+            backed_up.push(host_bak);
+        }
+        if default_path.exists() {
+            let (code, stdout, stderr) = HostBridge::run_privileged(&["cp", "-p", &host_def, &host_def_bak])?;
+            if code != 0 {
+                return Err(format!("Backup of {} failed (code {}): {} {}", host_def, code, stdout, stderr).trim().to_string());
             }
-            if backed_up.is_empty() {
-                backed_up.push(backup_path.display().to_string());
-            }
-            Ok(format!("Backup successfully generated: {}", backed_up.join(" and ")))
+            let _ = HostBridge::run_privileged(&["chmod", "644", &host_def_bak]);
+            backed_up.push(host_def_bak);
+        }
+
+        if backed_up.is_empty() {
+            Err(format!("No active GRUB files found at {} or {}", host_cfg, host_def))
         } else {
-            Err(format!("Backup failed (code {}): {} {}", code, stdout, stderr).trim().to_string())
+            Ok(format!("Backup successfully generated: {}", backed_up.join(" and ")))
         }
     }
 
-    /// Recovers the original configuration from grub.cfg.bak and /etc/default/grub.bak.
+    /// Recovers the original configuration by removing Mithrandir's drop-in and/or restoring `.bak` files.
     pub fn restore_backup() -> Result<String, String> {
         let cfg_path = Self::detect_grub_cfg_path();
         let backup_path = Self::get_backup_path(&cfg_path);
         let default_path = Self::detect_default_grub_path();
         let default_bak = Self::get_backup_path(&default_path);
+        let dropin_path = Self::detect_default_grub_d_dir().map(|d| d.join(MITHRANDIR_DROPIN_FILENAME));
 
-        if !backup_path.exists() && !default_bak.exists() {
+        let dropin_exists = dropin_path.as_ref().is_some_and(|p| p.exists());
+        if !backup_path.exists() && !default_bak.exists() && !dropin_exists {
             return Err(format!(
-                "No backup files found (checked {} and {})",
+                "No backup files or Mithrandir drop-in found (checked {} and {})",
                 backup_path.display(),
                 default_bak.display()
             ));
         }
 
-        let script = format!(
-            "RESTORED=0 && \
-             if [ -f '{bak}' ]; then cp -p '{bak}' '{cfg}' && RESTORED=1; fi && \
-             if [ -f '{def_bak}' ]; then cp -p '{def_bak}' '{def}' && RESTORED=1; fi && \
-             if [ $RESTORED -eq 0 ]; then echo 'No backup files could be restored' >&2; exit 1; fi && \
-             (update-grub || grub2-mkconfig -o '{cfg}' || grub-mkconfig -o '{cfg}' || true)",
-            bak = backup_path.display(),
-            cfg = cfg_path.display(),
-            def_bak = default_bak.display(),
-            def = default_path.display(),
-        );
+        let host_cfg = HostBridge::host_path(&cfg_path);
+        let host_bak = HostBridge::host_path(&backup_path);
+        let host_def = HostBridge::host_path(&default_path);
+        let host_def_bak = HostBridge::host_path(&default_bak);
 
-        let (code, stdout, stderr) = HostBridge::run_privileged(&["sh", "-c", &script])?;
-        if code == 0 {
-            let mut restored = Vec::new();
-            if backup_path.exists() {
-                restored.push(backup_path.display().to_string());
+        let mut restored = Vec::new();
+
+        if let Some(ref dp) = dropin_path {
+            if dp.exists() {
+                let host_dp = HostBridge::host_path(dp);
+                let (code, stdout, stderr) = HostBridge::run_privileged(&["rm", "-f", &host_dp])?;
+                if code != 0 {
+                    return Err(format!("Failed removing drop-in {} (code {}): {} {}", host_dp, code, stdout, stderr).trim().to_string());
+                }
+                restored.push(format!("removed {}", host_dp));
             }
-            if default_bak.exists() {
-                restored.push(default_bak.display().to_string());
-            }
-            Ok(format!("Configuration successfully restored from: {}", restored.join(", ")))
-        } else {
-            Err(format!("Restore failed (code {}): {} {}", code, stdout, stderr).trim().to_string())
         }
+
+        if backup_path.exists() {
+            let (code, stdout, stderr) = HostBridge::run_privileged(&["cp", "-p", &host_bak, &host_cfg])?;
+            if code != 0 {
+                return Err(format!("Restore of {} failed (code {}): {} {}", host_cfg, code, stdout, stderr).trim().to_string());
+            }
+            restored.push(host_bak);
+        }
+
+        if default_bak.exists() {
+            let (code, stdout, stderr) = HostBridge::run_privileged(&["cp", "-p", &host_def_bak, &host_def])?;
+            if code != 0 {
+                return Err(format!("Restore of {} failed (code {}): {} {}", host_def, code, stdout, stderr).trim().to_string());
+            }
+            restored.push(host_def_bak);
+        }
+
+        let plan = Self::detect_strategy_plan();
+        if plan.mkconfig_cmd.is_some() {
+            Self::regenerate_grub_cfg(plan.mkconfig_cmd.as_deref(), &host_cfg)?;
+        }
+
+        Ok(format!("Configuration successfully restored ({})", restored.join(", ")))
     }
 
-    /// Modifies /etc/default/grub and regenerates the active grub.cfg,
-    /// ensuring a backup is automatically preserved first.
+    /// Modifies GRUB using the safest distro-specific strategy and regenerates `grub.cfg`,
+    /// ensuring backups are preserved before any edit.
     pub fn save_and_update(timeout: i32, default_entry: &str, cmdline: Option<&str>) -> Result<(), String> {
+        Self::validate_grub_inputs(timeout, default_entry, cmdline)?;
+
+        let plan = Self::detect_strategy_plan();
+        if plan.strategy == GrubStrategy::UnsupportedBootloader {
+            return Err(format!(
+                "GRUB updates are disabled on this system: {}",
+                plan.label
+            ));
+        }
+
         let cfg_path = Self::detect_grub_cfg_path();
         let backup_path = Self::get_backup_path(&cfg_path);
         let default_path = Self::detect_default_grub_path();
+        let default_bak = Self::get_backup_path(&default_path);
 
-        let original_content = fs::read_to_string(&default_path).unwrap_or_default();
-        let updated_content = Self::update_default_grub_content(&original_content, timeout, default_entry, cmdline);
+        let host_cfg = HostBridge::host_path(&cfg_path);
+        let host_bak = HostBridge::host_path(&backup_path);
+        let host_def = HostBridge::host_path(&default_path);
+        let host_def_bak = HostBridge::host_path(&default_bak);
 
-        let tmp_path = format!("/tmp/mithrandir-grub-{}.tmp", std::process::id());
-        fs::write(&tmp_path, updated_content)
-            .map_err(|e| format!("Failed to stage temporary GRUB config: {}", e))?;
+        Self::backup_host_file_if_missing(cfg_path.exists(), &host_cfg, &host_bak)?;
 
-        let script = format!(
-            "if [ -f '{cfg}' ] && [ ! -f '{bak}' ]; then cp -p '{cfg}' '{bak}' && chmod 644 '{bak}'; fi && \
-             if [ -f '{def}' ] && [ ! -f '{def}.bak' ]; then cp -p '{def}' '{def}.bak' && chmod 644 '{def}.bak'; fi && \
-             cp -p '{tmp}' '{def}' && chmod 644 '{def}' && rm -f '{tmp}' && \
-             (update-grub || grub2-mkconfig -o '{cfg}' || grub-mkconfig -o '{cfg}')",
-            cfg = cfg_path.display(),
-            bak = backup_path.display(),
-            def = default_path.display(),
-            tmp = tmp_path,
-        );
+        match plan.strategy {
+            GrubStrategy::DropIn => {
+                let dropins_dir = Self::detect_default_grub_d_dir()
+                    .ok_or_else(|| "/etc/default/grub.d not found".to_string())?;
+                let host_dropin = HostBridge::host_path(&dropins_dir.join(MITHRANDIR_DROPIN_FILENAME));
+                let content = Self::build_dropin_content(timeout, default_entry, cmdline);
+                Self::write_host_file_privileged(&host_dropin, &content)?;
+            }
+            GrubStrategy::FedoraBlsGrubby => {
+                Self::backup_host_file_if_missing(default_path.exists(), &host_def, &host_def_bak)?;
+                let original_content = fs::read_to_string(&default_path).unwrap_or_default();
+                let updated_content = Self::update_default_grub_content(&original_content, timeout, default_entry, cmdline);
+                Self::write_host_file_privileged(&host_def, &updated_content)?;
 
-        let (code, stdout, stderr) = HostBridge::run_privileged(&["sh", "-c", &script])?;
-        let _ = fs::remove_file(&tmp_path);
-
-        if code == 0 {
-            Ok(())
-        } else {
-            Err(format!("GRUB update exited with code {}: {} {}", code, stdout, stderr).trim().to_string())
+                if let Some(cmd) = cmdline {
+                    let trimmed = cmd.trim();
+                    if !trimmed.is_empty() {
+                        let args_flag = format!("--args={}", trimmed);
+                        let (code, stdout, stderr) =
+                            HostBridge::run_privileged(&["grubby", "--update-kernel=ALL", &args_flag])?;
+                        if code != 0 {
+                            return Err(format!(
+                                "grubby kernel args update failed (code {}): {} {}",
+                                code, stdout, stderr
+                            )
+                            .trim()
+                            .to_string());
+                        }
+                    }
+                }
+            }
+            GrubStrategy::DirectDefaultGrub => {
+                Self::backup_host_file_if_missing(default_path.exists(), &host_def, &host_def_bak)?;
+                let original_content = fs::read_to_string(&default_path).unwrap_or_default();
+                let updated_content = Self::update_default_grub_content(&original_content, timeout, default_entry, cmdline);
+                Self::write_host_file_privileged(&host_def, &updated_content)?;
+            }
+            GrubStrategy::UnsupportedBootloader => unreachable!(),
         }
+
+        Self::regenerate_grub_cfg(plan.mkconfig_cmd.as_deref(), &host_cfg)
     }
 
     /// Safely updates key-value pairs in /etc/default/grub content.

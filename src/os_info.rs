@@ -8,6 +8,8 @@ pub enum LinuxDistro {
     Arch,
     CachyOS,
     OpenSuse,
+    Gentoo,
+    Mandriva,
     NixOS,
     Alpine,
     Unknown,
@@ -53,6 +55,8 @@ pub fn parse_os_release(content: &str) -> OsDetails {
         "arch" | "manjaro" | "endeavouros" => LinuxDistro::Arch,
         "cachyos" => LinuxDistro::CachyOS,
         "opensuse" | "opensuse-tumbleweed" | "opensuse-leap" | "suse" => LinuxDistro::OpenSuse,
+        "gentoo" | "funtoo" | "calculate" => LinuxDistro::Gentoo,
+        "openmandriva" | "mandriva" | "mageia" | "rosa" => LinuxDistro::Mandriva,
         "nixos" => LinuxDistro::NixOS,
         "alpine" => LinuxDistro::Alpine,
         _ => {
@@ -64,6 +68,10 @@ pub fn parse_os_release(content: &str) -> OsDetails {
                 LinuxDistro::Arch
             } else if id_like.iter().any(|s| s == "suse") {
                 LinuxDistro::OpenSuse
+            } else if id_like.iter().any(|s| s == "gentoo") {
+                LinuxDistro::Gentoo
+            } else if id_like.iter().any(|s| s == "mandriva" || s == "mageia") {
+                LinuxDistro::Mandriva
             } else {
                 LinuxDistro::Unknown
             }
@@ -99,7 +107,12 @@ pub fn detect_os() -> OsDetails {
 /// Returns the primary administrative group ('wheel' vs 'sudo') for a given distro.
 pub fn get_admin_group_for_distro(distro: LinuxDistro) -> &'static str {
     match distro {
-        LinuxDistro::Arch | LinuxDistro::CachyOS | LinuxDistro::Fedora | LinuxDistro::OpenSuse => "wheel",
+        LinuxDistro::Arch
+        | LinuxDistro::CachyOS
+        | LinuxDistro::Fedora
+        | LinuxDistro::OpenSuse
+        | LinuxDistro::Gentoo
+        | LinuxDistro::Mandriva => "wheel",
         _ => "sudo",
     }
 }

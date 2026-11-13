@@ -496,9 +496,14 @@ fn format_default_subtitle(status: &GrubLiveStatus) -> String {
         } else {
             String::new()
         };
+        let strategy_info = if status.strategy_label.is_empty() {
+            String::new()
+        } else {
+            format!(" • Strategy: {}", status.strategy_label)
+        };
         format!(
-            "🟢 {} ({}) • Modified: {}{}",
-            status.default_path, size_str, status.default_modified_time, dropins_info
+            "🟢 {} ({}) • Modified: {}{}{}",
+            status.default_path, size_str, status.default_modified_time, dropins_info, strategy_info
         )
     } else {
         format!("⚠️ {} (Not detected on filesystem)", status.default_path)
