@@ -226,6 +226,7 @@ impl MithrandirWindow {
         ];
 
         // Map section headers by row widget name
+        let rail_collapsed = Rc::new(std::cell::Cell::new(false));
         let mut section_map: std::collections::HashMap<&'static str, &'static str> =
             std::collections::HashMap::new();
         for spec in &pages {
@@ -234,7 +235,12 @@ impl MithrandirWindow {
             }
         }
         let section_map_rc = Rc::new(section_map);
+        let rail_for_hdr = rail_collapsed.clone();
         list_box.set_header_func(move |row, _before| {
+            if rail_for_hdr.get() {
+                row.set_header(None::<&gtk4::Widget>);
+                return;
+            }
             let name = row.widget_name();
             if let Some(sec_title) = section_map_rc.get(name.as_str()) {
                 let hdr = Label::builder()
@@ -250,10 +256,12 @@ impl MithrandirWindow {
 
         let initial_settings = AppSettings::get();
         let mut nav_items: Vec<(ListBoxRow, &'static str, &'static str, &'static str)> = Vec::new();
+        let mut rail_widgets: Vec<(ListBoxRow, GtkBox, Label, &'static str)> = Vec::new();
 
         for spec in &pages {
             let row = ListBoxRow::new();
             row.set_widget_name(spec.id);
+            row.set_tooltip_text(Some(spec.label));
             let row_box = GtkBox::builder()
                 .orientation(Orientation::Horizontal)
                 .spacing(12)
@@ -280,10 +288,12 @@ impl MithrandirWindow {
             row.set_visible(!is_disabled);
 
             list_box.append(&row);
-            nav_items.push((row, spec.id, spec.label, spec.subtitle));
+            nav_items.push((row.clone(), spec.id, spec.label, spec.subtitle));
+            rail_widgets.push((row, row_box, lbl, spec.label));
         }
 
         let nav_items_rc = Rc::new(nav_items);
+        let rail_widgets_rc = Rc::new(rail_widgets);
         sidebar_scroller.set_child(Some(&list_box));
         sidebar_toolbar.set_content(Some(&sidebar_scroller));
 
@@ -330,15 +340,48 @@ impl MithrandirWindow {
             }
         }
 
-        // Sidebar collapse/expand toggle on desktop & mobile
+        // Sidebar collapse/expand toggle: icon-only rail on desktop, sheet toggle on narrow screens
         {
             let split_for_toggle = split_view.clone();
+            let rail_state = rail_collapsed.clone();
+            let rail_items = rail_widgets_rc.clone();
+            let lb_for_toggle = list_box.clone();
+            let sb_title = sidebar_title.clone();
+            let toggle_btn_ref = sidebar_toggle_btn.clone();
+
             sidebar_toggle_btn.connect_clicked(move |_| {
                 if split_for_toggle.is_collapsed() {
-                    split_for_toggle.set_show_content(false);
+                    let showing_content = split_for_toggle.shows_content();
+                    split_for_toggle.set_show_content(!showing_content);
                 } else {
-                    split_for_toggle.set_collapsed(true);
-                    split_for_toggle.set_show_content(true);
+                    let next = !rail_state.get();
+                    rail_state.set(next);
+                    if next {
+                        split_for_toggle.set_min_sidebar_width(60.0);
+                        split_for_toggle.set_max_sidebar_width(60.0);
+                        sb_title.set_visible(false);
+                        toggle_btn_ref.set_tooltip_text(Some("Expand Sidebar"));
+                    } else {
+                        split_for_toggle.set_min_sidebar_width(220.0);
+                        split_for_toggle.set_max_sidebar_width(260.0);
+                        sb_title.set_visible(true);
+                        toggle_btn_ref.set_tooltip_text(Some("Collapse Sidebar"));
+                    }
+                    for (_row, row_box, lbl, _label_text) in rail_items.iter() {
+                        lbl.set_visible(!next);
+                        if next {
+                            row_box.set_halign(gtk4::Align::Center);
+                            row_box.set_spacing(0);
+                            row_box.set_margin_start(2);
+                            row_box.set_margin_end(2);
+                        } else {
+                            row_box.set_halign(gtk4::Align::Fill);
+                            row_box.set_spacing(12);
+                            row_box.set_margin_start(8);
+                            row_box.set_margin_end(8);
+                        }
+                    }
+                    lb_for_toggle.invalidate_headers();
                 }
             });
         }
@@ -405,7 +448,7 @@ impl MithrandirWindow {
                     .application_name("Mithrandir")
                     .application_icon("io.github.antux912012.Mithrandir")
                     .developer_name("Antonio De Gaetano")
-                    .version("1.2.0")
+                    .version("1.2.1")
                     .comments("Native Linux System Optimization, Cache Management, CachyOS Scheduler Controller & Hardware Power Manager in Rust (GTK4 & Libadwaita)")
                     .website("https://github.com/Antux912012/mithrandir")
                     .license_type(gtk4::License::Gpl30Only)
@@ -436,6 +479,64 @@ impl MithrandirWindow {
 
             let out_dir = PathBuf::from(capture_dir);
             let _ = std::fs::create_dir_all(&out_dir);
+
+            if std::env::var("MITHRANDIR_CAPTURE_RAIL").is_ok() {
+                let step = Rc::new(Cell::new(0usize));
+                let win_cap = window.clone();
+                let btn_cap = sidebar_toggle_btn.clone();
+                gtk4::glib::timeout_add_local(Duration::from_millis(700), move || {
+                    let idx = step.get();
+                    if idx == 0 {
+                        btn_cap.emit_clicked();
+                        let w_ref = win_cap.clone().upcast::<gtk4::Widget>();
+                        let out = out_dir.join("rail-collapsed.png");
+                        gtk4::glib::timeout_add_local_once(Duration::from_millis(400), move || {
+                            let paintable = gtk4::WidgetPaintable::new(Some(&w_ref));
+                            let snap = gtk4::Snapshot::new();
+                            gtk4::gdk::prelude::PaintableExt::snapshot(
+                                &paintable,
+                                &snap,
+                                w_ref.width().max(1) as f64,
+                                w_ref.height().max(1) as f64,
+                            );
+                            if let Some(node) = snap.to_node() {
+                                if let Some(renderer) = w_ref.native().and_then(|n| n.renderer()) {
+                                    let _ = renderer.render_texture(&node, None).save_to_png(out);
+                                }
+                            }
+                        });
+                        step.set(1);
+                        gtk4::glib::ControlFlow::Continue
+                    } else if idx == 1 {
+                        btn_cap.emit_clicked();
+                        let w_ref = win_cap.clone().upcast::<gtk4::Widget>();
+                        let out = out_dir.join("rail-expanded.png");
+                        let win_quit = win_cap.clone();
+                        gtk4::glib::timeout_add_local_once(Duration::from_millis(400), move || {
+                            let paintable = gtk4::WidgetPaintable::new(Some(&w_ref));
+                            let snap = gtk4::Snapshot::new();
+                            gtk4::gdk::prelude::PaintableExt::snapshot(
+                                &paintable,
+                                &snap,
+                                w_ref.width().max(1) as f64,
+                                w_ref.height().max(1) as f64,
+                            );
+                            if let Some(node) = snap.to_node() {
+                                if let Some(renderer) = w_ref.native().and_then(|n| n.renderer()) {
+                                    let _ = renderer.render_texture(&node, None).save_to_png(out);
+                                }
+                            }
+                            if let Some(app) = win_quit.application() {
+                                app.quit();
+                            }
+                        });
+                        gtk4::glib::ControlFlow::Break
+                    } else {
+                        gtk4::glib::ControlFlow::Break
+                    }
+                });
+                return window;
+            }
 
             let pages: Vec<(&'static str, &'static str)> = vec![
                 ("dashboard", "01-dashboard.png"),

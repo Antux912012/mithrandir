@@ -1,6 +1,6 @@
 # Maintainer: Antonio <antux912012@users.noreply.github.com>
 pkgname=mithrandir
-pkgver=1.2.0
+pkgver=1.2.1
 pkgrel=1
 pkgdesc="Native GTK4 & Libadwaita GNU/Linux System Optimizer, CachyOS Scheduler & Power Manager in Rust"
 arch=('x86_64')
