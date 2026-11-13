@@ -1,6 +1,6 @@
 pkgbase = mithrandir
 	pkgdesc = Native GTK4 & Libadwaita GNU/Linux System Optimizer, CachyOS Scheduler & Power Manager in Rust
-	pkgver = 1.3.0
+	pkgver = 1.3.1
 	pkgrel = 1
 	url = https://github.com/Antux912012/mithrandir
 	install = mithrandir.install
@@ -19,7 +19,7 @@ pkgbase = mithrandir
 	provides = mithrandir-rs
 	conflicts = mithrandir-rs
 	replaces = mithrandir-rs
-	source = mithrandir-1.3.0.tar.gz::https://github.com/Antux912012/mithrandir/archive/refs/tags/v1.3.0.tar.gz
+	source = mithrandir-1.3.1.tar.gz::https://github.com/Antux912012/mithrandir/archive/refs/tags/v1.3.1.tar.gz
 	sha256sums = 2573f5551896c448b154efdc291ccc9e3be7cf92022eaebf1b67eb520e162aa7
 
 pkgname = mithrandir

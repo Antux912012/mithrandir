@@ -186,6 +186,18 @@ fn main() {
 
         app.connect_startup(move |app| {
             *hg_init.borrow_mut() = Some(app.hold());
+
+            // Register bundled Papirus symbolic icons so UI icons render on any desktop theme.
+            const GRESOURCE_BYTES: &[u8] =
+                include_bytes!(concat!(env!("OUT_DIR"), "/mithrandir.gresource"));
+            let bytes = gtk4::glib::Bytes::from_static(GRESOURCE_BYTES);
+            if let Ok(resource) = gtk4::gio::Resource::from_data(&bytes) {
+                gtk4::gio::resources_register(&resource);
+            }
+            if let Some(display) = gtk4::gdk::Display::default() {
+                let icon_theme = gtk4::IconTheme::for_display(&display);
+                icon_theme.add_resource_path("/io/github/antux912012/Mithrandir/icons/papirus");
+            }
         });
 
         let ps_arc_action = power_saver_arc.clone();
