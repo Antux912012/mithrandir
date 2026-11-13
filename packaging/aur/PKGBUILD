@@ -27,7 +27,7 @@ optdepends=(
     'power-profiles-daemon: Dynamic system power profile integration'
 )
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Antux912012/${pkgname}/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('bacedc4f7d7d375c644c285426e43175c64bf283a42858ae76aeece88aa2fbc6')
 
 prepare() {
     cd "${srcdir}/${pkgname}-${pkgver}"

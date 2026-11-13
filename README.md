@@ -121,6 +121,11 @@ flatpak run io.github.antux912012.Mithrandir
 sudo dpkg -i mithrandir_1.2.0_amd64.deb
 ```
 
+### Fedora / RHEL / openSUSE Package (`.rpm`)
+```bash
+sudo dnf install ./mithrandir-1.2.0-1.x86_64.rpm
+```
+
 ### AppImage (`.AppImage`)
 Run instantly on any modern GNU/Linux distribution:
 ```bash
@@ -168,7 +173,7 @@ mithrandir --clean
 
 ### Quick Build with Makefile
 ```bash
-# Build all targets (release binary, Flatpak, Deb, AppImage)
+# Build all targets (release binary, Flatpak, Deb, RPM, AppImage)
 make all
 
 # Build only the Flatpak bundle
@@ -177,12 +182,27 @@ make flatpak
 # Build only the Debian package
 make deb
 
+# Build only the RPM package
+make rpm
+
 # Build only the AppImage package
 make appimage
 
 # Run unit & integration test suite
 make test
 ```
+
+---
+
+## 🙏 Acknowledgments & Project Inspirations
+
+Mithrandir was built with gratitude for the open-source Linux ecosystem and draws inspiration from the following outstanding projects:
+
+- **[Stacer](https://github.com/oguzhaninan/Stacer)** (`oguzhaninan/Stacer`) — Inspiration for the real-time hardware telemetry dashboard, system cleaner, and service/process management workflows.
+- **[BleachBit](https://github.com/bleachbit/bleachbit)** (`bleachbit/bleachbit`) — Inspiration for safe, multi-category system and browser cache cleaning.
+- **[CachyOS](https://github.com/CachyOS)** (`CachyOS`) — Inspiration for BORE (`sched_bore`) scheduler integration, interactive latency tuning, and kernel/power optimization profiles.
+- **[GNOME & Libadwaita](https://gitlab.gnome.org/GNOME/libadwaita)** / **[gtk4-rs](https://github.com/gtk-rs/gtk4-rs)** — Native GNOME Human Interface Guidelines (HIG) and Rust GTK4/Libadwaita bindings.
+- **[sysinfo](https://github.com/GuillaumeGomez/sysinfo)** & **[ksni](https://github.com/iovxw/ksni)** — Pure-Rust hardware telemetry and StatusNotifierItem (`org.kde.StatusNotifierItem`) tray support without GTK3 symbol conflicts.
 
 ---
 
