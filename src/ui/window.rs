@@ -1,15 +1,15 @@
 use gtk4::prelude::*;
 use gtk4::{
-    Align, Box as GtkBox, Button, Image, Label, ListBox, ListBoxRow, Orientation, PolicyType,
-    ScrolledWindow, Separator, Stack,
+    Box as GtkBox, Button, Image, Label, ListBox, ListBoxRow, Orientation, PolicyType,
+    ScrolledWindow, Stack,
 };
 use libadwaita as adw;
 use adw::prelude::*;
 use adw::{
     AboutDialog, ApplicationWindow, Breakpoint, BreakpointCondition, BreakpointConditionLengthType,
-    HeaderBar, LengthUnit, ToastOverlay, ToolbarView, WindowTitle,
+    HeaderBar, LengthUnit, NavigationPage, NavigationSplitView, ToastOverlay, ToolbarView,
+    WindowTitle,
 };
-use std::cell::Cell;
 use std::rc::Rc;
 use crate::backend::settings::AppSettings;
 use crate::ui::ai::AIPage;
@@ -29,65 +29,55 @@ use crate::ui::uninstaller::UninstallerPage;
 pub struct MithrandirWindow;
 
 impl MithrandirWindow {
-    pub const EXPANDED_WIDTH: i32 = 220;
-    pub const COLLAPSED_WIDTH: i32 = 56;
-
     pub fn build(app: &adw::Application) -> ApplicationWindow {
         ThemeManager::apply_theme();
 
         let window = ApplicationWindow::builder()
             .application(app)
             .title("Mithrandir")
-            .default_width(880)
-            .default_height(640)
+            .default_width(980)
+            .default_height(680)
             .build();
 
         // Responsive min-size standard for mobile Linux devices (Phosh / Librem 5 / PinePhone)
         window.set_size_request(360, 480);
 
         let toast_overlay = ToastOverlay::new();
-        let toolbar_view = ToolbarView::new();
-        let header_bar = HeaderBar::new();
-
-        let title_widget = WindowTitle::new("Mithrandir", "Dashboard");
-        header_bar.set_title_widget(Some(&title_widget));
-
-        // Top Left Toggle Box aligned strictly with the sidebar icon column (56px width)
-        let toggle_box = GtkBox::builder()
-            .orientation(Orientation::Horizontal)
-            .width_request(Self::COLLAPSED_WIDTH)
-            .halign(Align::Center)
-            .valign(Align::Center)
-            .hexpand(false)
+        let split_view = NavigationSplitView::builder()
+            .min_sidebar_width(220.0)
+            .max_sidebar_width(270.0)
+            .sidebar_width_fraction(0.26)
             .build();
 
-        let menu_btn = Button::builder()
+        // ---------------------------------------------------------
+        // Content Pane (Right): HeaderBar + Stack
+        // ---------------------------------------------------------
+        let content_toolbar = ToolbarView::new();
+        let content_header = HeaderBar::new();
+        let content_title = WindowTitle::new("Overview", "System health, sensors & quick boost");
+        content_header.set_title_widget(Some(&content_title));
+
+        let sidebar_toggle_btn = Button::builder()
             .icon_name("sidebar-show-symbolic")
-            .tooltip_text("Collapse Sidebar")
-            .halign(Align::Center)
-            .valign(Align::Center)
+            .tooltip_text("Toggle Sidebar")
             .build();
-        menu_btn.add_css_class("flat");
-        menu_btn.add_css_class("sidebar-toggle-btn");
-        toggle_box.append(&menu_btn);
-        header_bar.pack_start(&toggle_box);
+        sidebar_toggle_btn.add_css_class("flat");
+        content_header.pack_start(&sidebar_toggle_btn);
 
-        // Header Right: Preferences & Info Buttons
         let pref_btn = Button::builder()
             .icon_name("emblem-system-symbolic")
             .tooltip_text("Preferences")
             .build();
-        header_bar.pack_end(&pref_btn);
+        content_header.pack_end(&pref_btn);
 
         let info_btn = Button::builder()
             .icon_name("dialog-information-symbolic")
             .tooltip_text("About Mithrandir")
             .build();
-        header_bar.pack_end(&info_btn);
+        content_header.pack_end(&info_btn);
 
-        toolbar_view.add_top_bar(&header_bar);
+        content_toolbar.add_top_bar(&content_header);
 
-        // Stack for functional pages
         let stack = Stack::builder()
             .hexpand(true)
             .vexpand(true)
@@ -95,10 +85,10 @@ impl MithrandirWindow {
             .build();
 
         let page_dashboard = DashboardPage::build(Some(toast_overlay.clone()));
-        let page_hardware = HardwarePage::build(Some(toast_overlay.clone()));
-        let page_kernel_power = KernelPowerPage::build(Some(toast_overlay.clone()));
-        let page_ai = AIPage::build(Some(toast_overlay.clone()));
         let page_cleaner = CleanerPage::build();
+        let page_ai = AIPage::build(Some(toast_overlay.clone()));
+        let page_kernel_power = KernelPowerPage::build(Some(toast_overlay.clone()));
+        let page_hardware = HardwarePage::build(Some(toast_overlay.clone()));
         let page_processes = ProcessesPage::build();
         let page_services = ServicesPage::build();
         let page_autostart = AutostartPage::build();
@@ -106,11 +96,11 @@ impl MithrandirWindow {
         let page_btrfs = BtrfsPage::build();
         let page_grub = GrubPage::build(Some(toast_overlay.clone()));
 
-        stack.add_titled(&page_dashboard, Some("dashboard"), "Dashboard");
-        stack.add_titled(&page_hardware, Some("hardware"), "Hardware");
+        stack.add_titled(&page_dashboard, Some("dashboard"), "Overview");
+        stack.add_titled(&page_cleaner, Some("cleaner"), "Smart Cleaner");
+        stack.add_titled(&page_ai, Some("ai"), "AI Assistant");
         stack.add_titled(&page_kernel_power, Some("kernel_power"), "Kernel & Power");
-        stack.add_titled(&page_ai, Some("ai"), "AI Optimizer");
-        stack.add_titled(&page_cleaner, Some("cleaner"), "Cleaner");
+        stack.add_titled(&page_hardware, Some("hardware"), "Hardware");
         stack.add_titled(&page_processes, Some("processes"), "Processes");
         stack.add_titled(&page_services, Some("services"), "Services");
         stack.add_titled(&page_autostart, Some("autostart"), "Startup Apps");
@@ -118,28 +108,21 @@ impl MithrandirWindow {
         stack.add_titled(&page_btrfs, Some("btrfs"), "BTRFS Snapshots");
         stack.add_titled(&page_grub, Some("grub"), "GRUB Bootloader");
 
-        let pages = [
-            ("dashboard", "Dashboard", "utilities-system-monitor-symbolic"),
-            ("hardware", "Hardware", "computer-symbolic"),
-            ("kernel_power", "Kernel & Power", "speedometer-symbolic"),
-            ("ai", "AI Optimizer", "starred-symbolic"),
-            ("cleaner", "Cleaner", "edit-clear-all-symbolic"),
-            ("processes", "Processes", "view-list-bullet-symbolic"),
-            ("services", "Services", "emblem-system-symbolic"),
-            ("autostart", "Startup Apps", "system-run-symbolic"),
-            ("uninstaller", "Uninstaller", "system-software-install-symbolic"),
-            ("btrfs", "BTRFS Snapshots", "drive-harddisk-symbolic"),
-            ("grub", "GRUB Bootloader", "preferences-system-symbolic"),
-        ];
-
-        // Sidebar Container: STRICTLY hexpand = false so it never steals width from content
-        let sidebar_box = GtkBox::builder()
-            .orientation(Orientation::Vertical)
-            .hexpand(false)
-            .vexpand(true)
+        content_toolbar.set_content(Some(&stack));
+        let content_nav_page = NavigationPage::builder()
+            .title("Overview")
+            .child(&content_toolbar)
             .build();
-        sidebar_box.set_size_request(Self::EXPANDED_WIDTH, -1);
-        sidebar_box.add_css_class("sidebar");
+        split_view.set_content(Some(&content_nav_page));
+
+        // ---------------------------------------------------------
+        // Sidebar Pane (Left): Grouped Navigation List
+        // ---------------------------------------------------------
+        let sidebar_toolbar = ToolbarView::new();
+        let sidebar_header = HeaderBar::new();
+        let sidebar_title = WindowTitle::new("Mithrandir", "");
+        sidebar_header.set_title_widget(Some(&sidebar_title));
+        sidebar_toolbar.add_top_bar(&sidebar_header);
 
         let sidebar_scroller = ScrolledWindow::builder()
             .hexpand(false)
@@ -153,25 +136,138 @@ impl MithrandirWindow {
             .build();
         list_box.add_css_class("navigation-sidebar");
 
-        let initial_settings = AppSettings::get();
-        let mut nav_items = Vec::new();
+        // Grouped information architecture: Overview & Care, Performance & Hardware, System & Recovery
+        struct NavSpec {
+            id: &'static str,
+            label: &'static str,
+            subtitle: &'static str,
+            icon: &'static str,
+            section: Option<&'static str>,
+        }
 
-        for (id, label_str, icon_name) in pages {
+        let pages = [
+            NavSpec {
+                id: "dashboard",
+                label: "Overview",
+                subtitle: "System health, sensors & quick boost",
+                icon: "utilities-system-monitor-symbolic",
+                section: Some("OVERVIEW & CARE"),
+            },
+            NavSpec {
+                id: "cleaner",
+                label: "Smart Cleaner",
+                subtitle: "Reclaim caches, logs & temporary clutter",
+                icon: "edit-clear-all-symbolic",
+                section: None,
+            },
+            NavSpec {
+                id: "ai",
+                label: "AI Assistant",
+                subtitle: "One-click triage & natural-language tuning",
+                icon: "starred-symbolic",
+                section: None,
+            },
+            NavSpec {
+                id: "kernel_power",
+                label: "Kernel & Power",
+                subtitle: "BORE scheduler, CPU governors & ASPM",
+                icon: "speedometer-symbolic",
+                section: Some("PERFORMANCE & HARDWARE"),
+            },
+            NavSpec {
+                id: "hardware",
+                label: "Hardware",
+                subtitle: "Battery health, NVMe, RAM, display & PCI",
+                icon: "computer-symbolic",
+                section: None,
+            },
+            NavSpec {
+                id: "processes",
+                label: "Processes",
+                subtitle: "Inspect & manage running processes",
+                icon: "view-list-bullet-symbolic",
+                section: None,
+            },
+            NavSpec {
+                id: "services",
+                label: "Services",
+                subtitle: "Manage systemd units",
+                icon: "emblem-system-symbolic",
+                section: Some("SYSTEM & RECOVERY"),
+            },
+            NavSpec {
+                id: "autostart",
+                label: "Startup Apps",
+                subtitle: "Control login applications",
+                icon: "system-run-symbolic",
+                section: None,
+            },
+            NavSpec {
+                id: "uninstaller",
+                label: "Uninstaller",
+                subtitle: "Remove native, Flatpak, Snap & Pip apps",
+                icon: "system-software-install-symbolic",
+                section: None,
+            },
+            NavSpec {
+                id: "btrfs",
+                label: "BTRFS Snapshots",
+                subtitle: "Create & restore filesystem snapshots",
+                icon: "drive-harddisk-symbolic",
+                section: None,
+            },
+            NavSpec {
+                id: "grub",
+                label: "GRUB Bootloader",
+                subtitle: "Kernel boot parameters & timeout",
+                icon: "preferences-system-symbolic",
+                section: None,
+            },
+        ];
+
+        // Map section headers by row widget name
+        let mut section_map: std::collections::HashMap<&'static str, &'static str> =
+            std::collections::HashMap::new();
+        for spec in &pages {
+            if let Some(sec) = spec.section {
+                section_map.insert(spec.id, sec);
+            }
+        }
+        let section_map_rc = Rc::new(section_map);
+        list_box.set_header_func(move |row, _before| {
+            let name = row.widget_name();
+            if let Some(sec_title) = section_map_rc.get(name.as_str()) {
+                let hdr = Label::builder()
+                    .label(*sec_title)
+                    .xalign(0.0)
+                    .build();
+                hdr.add_css_class("sidebar-section-header");
+                row.set_header(Some(&hdr));
+            } else {
+                row.set_header(None::<&gtk4::Widget>);
+            }
+        });
+
+        let initial_settings = AppSettings::get();
+        let mut nav_items: Vec<(ListBoxRow, &'static str, &'static str, &'static str)> = Vec::new();
+
+        for spec in &pages {
             let row = ListBoxRow::new();
+            row.set_widget_name(spec.id);
             let row_box = GtkBox::builder()
                 .orientation(Orientation::Horizontal)
-                .spacing(10)
-                .margin_top(6)
-                .margin_bottom(6)
+                .spacing(12)
+                .margin_top(7)
+                .margin_bottom(7)
                 .margin_start(8)
                 .margin_end(8)
                 .build();
 
-            let icon = Image::from_icon_name(icon_name);
-            icon.set_pixel_size(20);
+            let icon = Image::from_icon_name(spec.icon);
+            icon.set_pixel_size(18);
 
             let lbl = Label::builder()
-                .label(label_str)
+                .label(spec.label)
                 .hexpand(true)
                 .xalign(0.0)
                 .build();
@@ -180,112 +276,92 @@ impl MithrandirWindow {
             row_box.append(&lbl);
             row.set_child(Some(&row_box));
 
-            let is_disabled = initial_settings.disabled_tabs.iter().any(|t| t == id);
+            let is_disabled = initial_settings.disabled_tabs.iter().any(|t| t == spec.id);
             row.set_visible(!is_disabled);
 
             list_box.append(&row);
-
-            nav_items.push((icon, lbl, row.clone(), label_str.to_string(), id));
+            nav_items.push((row, spec.id, spec.label, spec.subtitle));
         }
 
-        sidebar_scroller.set_child(Some(&list_box));
-        sidebar_box.append(&sidebar_scroller);
-
-        // Sidebar expand / collapse controller (Zen / Firefox style)
-        let is_expanded = Rc::new(Cell::new(true));
         let nav_items_rc = Rc::new(nav_items);
+        sidebar_scroller.set_child(Some(&list_box));
+        sidebar_toolbar.set_content(Some(&sidebar_scroller));
 
-        let apply_sidebar_state = {
-            let sidebar_box = sidebar_box.clone();
-            let nav_items = nav_items_rc.clone();
-            let menu_btn = menu_btn.clone();
-            let is_expanded = is_expanded.clone();
-            Rc::new(move |expanded: bool| {
-                is_expanded.set(expanded);
-                if expanded {
-                    sidebar_box.set_size_request(Self::EXPANDED_WIDTH, -1);
-                    menu_btn.set_tooltip_text(Some("Collapse Sidebar"));
-                    for (icon, lbl, row, _title, _) in nav_items.iter() {
-                        lbl.set_visible(true);
-                        icon.set_hexpand(false);
-                        icon.set_halign(Align::Start);
-                        row.set_tooltip_text(None);
-                    }
-                } else {
-                    sidebar_box.set_size_request(Self::COLLAPSED_WIDTH, -1);
-                    menu_btn.set_tooltip_text(Some("Expand Sidebar"));
-                    for (icon, lbl, row, title, _) in nav_items.iter() {
-                        lbl.set_visible(false);
-                        icon.set_hexpand(true);
-                        icon.set_halign(Align::Center);
-                        row.set_tooltip_text(Some(title));
+        let sidebar_nav_page = NavigationPage::builder()
+            .title("Mithrandir")
+            .child(&sidebar_toolbar)
+            .build();
+        split_view.set_sidebar(Some(&sidebar_nav_page));
+
+        // Navigation row selection: lookup by widget_name
+        {
+            let stack_for_nav = stack.clone();
+            let title_for_nav = content_title.clone();
+            let nav_page_for_nav = content_nav_page.clone();
+            let split_for_nav = split_view.clone();
+            let nav_items_lookup = nav_items_rc.clone();
+
+            list_box.connect_row_selected(move |_, row_opt| {
+                if let Some(row) = row_opt {
+                    let row_id = row.widget_name();
+                    if let Some((_, id, label, subtitle)) =
+                        nav_items_lookup.iter().find(|(_, id, _, _)| *id == row_id.as_str())
+                    {
+                        stack_for_nav.set_visible_child_name(id);
+                        title_for_nav.set_title(label);
+                        title_for_nav.set_subtitle(subtitle);
+                        nav_page_for_nav.set_title(label);
+                        if split_for_nav.is_collapsed() {
+                            split_for_nav.set_show_content(true);
+                        }
                     }
                 }
-            })
-        };
+            });
+        }
 
-        let apply_toggle = apply_sidebar_state.clone();
-        let is_expanded_btn = is_expanded.clone();
-        menu_btn.connect_clicked(move |_| {
-            apply_toggle(!is_expanded_btn.get());
-        });
+        // Select first visible item at startup
+        for (row, id, label, subtitle) in nav_items_rc.iter() {
+            if !initial_settings.disabled_tabs.iter().any(|t| t == id) {
+                list_box.select_row(Some(row));
+                stack.set_visible_child_name(id);
+                content_title.set_title(label);
+                content_title.set_subtitle(subtitle);
+                break;
+            }
+        }
 
-        // Breakpoint: adapt automatically on smaller/mobile viewports (<= 720sp)
+        // Sidebar collapse/expand toggle on desktop & mobile
+        {
+            let split_for_toggle = split_view.clone();
+            sidebar_toggle_btn.connect_clicked(move |_| {
+                if split_for_toggle.is_collapsed() {
+                    split_for_toggle.set_show_content(false);
+                } else {
+                    split_for_toggle.set_collapsed(true);
+                    split_for_toggle.set_show_content(true);
+                }
+            });
+        }
+
+        // Adaptive breakpoint for narrow/mobile viewports (<= 720sp)
         let breakpoint = Breakpoint::new(BreakpointCondition::new_length(
             BreakpointConditionLengthType::MaxWidth,
             720.0,
             LengthUnit::Sp,
         ));
-        let apply_bp_apply = apply_sidebar_state.clone();
-        breakpoint.connect_apply(move |_| {
-            apply_bp_apply(false);
-        });
-        let apply_bp_unapply = apply_sidebar_state.clone();
-        breakpoint.connect_unapply(move |_| {
-            apply_bp_unapply(true);
-        });
+        {
+            let split_bp_apply = split_view.clone();
+            breakpoint.connect_apply(move |_| {
+                split_bp_apply.set_collapsed(true);
+            });
+            let split_bp_unapply = split_view.clone();
+            breakpoint.connect_unapply(move |_| {
+                split_bp_unapply.set_collapsed(false);
+            });
+        }
         window.add_breakpoint(breakpoint);
 
-        // Navigation row selection: single source of truth
-        let stack_for_nav = stack.clone();
-        let title_for_nav = title_widget.clone();
-
-        list_box.connect_row_selected(move |_, row_opt| {
-            if let Some(row) = row_opt {
-                let idx = row.index();
-                if idx >= 0 && (idx as usize) < pages.len() {
-                    let (id, title_str, _) = pages[idx as usize];
-                    stack_for_nav.set_visible_child_name(id);
-                    title_for_nav.set_subtitle(title_str);
-                }
-            }
-        });
-
-        // Highlight first visible item at startup
-        for (_, _, row, _, id) in nav_items_rc.iter() {
-            if !initial_settings.disabled_tabs.iter().any(|t| t == id) {
-                list_box.select_row(Some(row));
-                stack.set_visible_child_name(id);
-                break;
-            }
-        }
-
-        // Main Horizontal View: [Sidebar (fixed width)] | [Separator] | [Stack (hexpand true)]
-        let main_box = GtkBox::builder()
-            .orientation(Orientation::Horizontal)
-            .hexpand(true)
-            .vexpand(true)
-            .build();
-
-        main_box.append(&sidebar_box);
-
-        let sep = Separator::new(Orientation::Vertical);
-        main_box.append(&sep);
-
-        main_box.append(&stack);
-
-        toolbar_view.set_content(Some(&main_box));
-        toast_overlay.set_child(Some(&toolbar_view));
+        toast_overlay.set_child(Some(&split_view));
         window.set_content(Some(&toast_overlay));
 
         // Connect Preferences
@@ -301,7 +377,7 @@ impl MithrandirWindow {
                 let dlg = PreferencesDialog::build(&win, move || {
                     let cfg = AppSettings::get();
                     let mut first_visible = None;
-                    for (_, _, row, _, id) in nav_ref.iter() {
+                    for (row, id, _, _) in nav_ref.iter() {
                         let is_disabled = cfg.disabled_tabs.iter().any(|t| t == id);
                         row.set_visible(!is_disabled);
                         if !is_disabled && first_visible.is_none() {
@@ -328,8 +404,8 @@ impl MithrandirWindow {
                 let about = AboutDialog::builder()
                     .application_name("Mithrandir")
                     .application_icon("io.github.antux912012.Mithrandir")
-                    .developer_name("Antux912012")
-                    .version("1.1.2")
+                    .developer_name("Antonio De Gaetano")
+                    .version("1.2.0")
                     .comments("Native Linux System Optimization, Cache Management, CachyOS Scheduler Controller & Hardware Power Manager in Rust (GTK4 & Libadwaita)")
                     .website("https://github.com/Antux912012/mithrandir")
                     .license_type(gtk4::License::Gpl30Only)
@@ -350,6 +426,84 @@ impl MithrandirWindow {
                 gtk4::glib::Propagation::Proceed
             }
         });
+
+        if let Ok(capture_dir) = std::env::var("MITHRANDIR_CAPTURE_DIR") {
+            use gtk4::gdk::prelude::TextureExt;
+            use gtk4::gsk::prelude::GskRendererExt;
+            use std::cell::Cell;
+            use std::path::PathBuf;
+            use std::time::Duration;
+
+            let out_dir = PathBuf::from(capture_dir);
+            let _ = std::fs::create_dir_all(&out_dir);
+
+            let pages: Vec<(&'static str, &'static str)> = vec![
+                ("dashboard", "01-dashboard.png"),
+                ("kernel_power", "02-kernel-power.png"),
+                ("cleaner", "03-cleaner.png"),
+                ("uninstaller", "04-uninstaller.png"),
+                ("grub", "05-grub.png"),
+                ("ai", "06-ai-optimizer.png"),
+            ];
+
+            let step = Rc::new(Cell::new(0usize));
+            let win_cap = window.clone();
+            let lb_cap = list_box.clone();
+            let nav_cap = nav_items_rc.clone();
+
+            gtk4::glib::timeout_add_local(Duration::from_millis(900), move || {
+                let idx = step.get();
+
+                if idx < pages.len() {
+                    let (tab_id, file_name) = pages[idx];
+                    if let Some((row, _, _, _)) = nav_cap.iter().find(|(_, id, _, _)| *id == tab_id) {
+                        lb_cap.select_row(Some(row));
+                    }
+                    let w_ref = win_cap.clone().upcast::<gtk4::Widget>();
+                    let fname = file_name.to_string();
+                    let out_dir_inner = out_dir.clone();
+                    gtk4::glib::timeout_add_local_once(Duration::from_millis(600), move || {
+                        let paintable = gtk4::WidgetPaintable::new(Some(&w_ref));
+                        let snap = gtk4::Snapshot::new();
+                        let width = w_ref.width().max(1) as f64;
+                        let height = w_ref.height().max(1) as f64;
+                        gtk4::gdk::prelude::PaintableExt::snapshot(&paintable, &snap, width, height);
+                        if let Some(node) = snap.to_node() {
+                            if let Some(renderer) = w_ref.native().and_then(|n| n.renderer()) {
+                                let tex = renderer.render_texture(&node, None);
+                                let _ = tex.save_to_png(out_dir_inner.join(fname));
+                            }
+                        }
+                    });
+                    step.set(idx + 1);
+                    gtk4::glib::ControlFlow::Continue
+                } else {
+                    let dlg = PreferencesDialog::build(&win_cap, || {});
+                    dlg.present();
+                    let dlg_w = dlg.clone().upcast::<gtk4::Widget>();
+                    let out_dir_pref = out_dir.clone();
+                    let win_quit = win_cap.clone();
+                    gtk4::glib::timeout_add_local_once(Duration::from_millis(400), move || {
+                        let paintable = gtk4::WidgetPaintable::new(Some(&dlg_w));
+                        let snap = gtk4::Snapshot::new();
+                        let width = dlg_w.width().max(1) as f64;
+                        let height = dlg_w.height().max(1) as f64;
+                        gtk4::gdk::prelude::PaintableExt::snapshot(&paintable, &snap, width, height);
+                        if let Some(node) = snap.to_node() {
+                            if let Some(renderer) = dlg_w.native().and_then(|n| n.renderer()) {
+                                let tex = renderer.render_texture(&node, None);
+                                let _ = tex.save_to_png(out_dir_pref.join("07-preferences.png"));
+                            }
+                        }
+                        dlg.close();
+                        if let Some(app) = win_quit.application() {
+                            app.quit();
+                        }
+                    });
+                    gtk4::glib::ControlFlow::Break
+                }
+            });
+        }
 
         window
     }

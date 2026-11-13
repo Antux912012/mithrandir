@@ -1,8 +1,8 @@
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
-    Align, Box as GtkBox, Button, Entry, Frame, Image, Orientation, ProgressBar,
-    ScrolledWindow, TextView, WrapMode,
+    Align, Box as GtkBox, Button, Entry, FlowBox, Frame, Image, Orientation, ProgressBar,
+    ScrolledWindow, SelectionMode, TextView, WrapMode,
 };
 use libadwaita as adw;
 use adw::prelude::*;
@@ -154,7 +154,6 @@ impl AIPage {
         agents_expander.add_suffix(&scan_btn);
 
         agents_group.add(&agents_expander);
-        root_box.append(&agents_group);
 
         // ---------------------------------------------------------
         // 3. Provider & Model Configuration
@@ -182,13 +181,20 @@ impl AIPage {
         let saved_cfg = AppSettings::get();
         let initial_provider_idx = provider_index_from_id(&saved_cfg.ai_provider);
 
+        let provider_expander = ExpanderRow::builder()
+            .title("Configure AI Provider &amp; Model")
+            .subtitle(format!("Active: {} ({})", saved_cfg.ai_provider, saved_cfg.ai_model))
+            .expanded(false)
+            .build();
+        provider_expander.add_prefix(&Image::from_icon_name("emblem-system-symbolic"));
+
         let provider_row = ComboRow::builder()
             .title("Active Provider / Source")
             .subtitle("Select inference backend or local agent session")
             .model(&provider_model)
             .selected(initial_provider_idx)
             .build();
-        provider_group.add(&provider_row);
+        provider_expander.add_row(&provider_row);
 
         let url_row = ActionRow::builder()
             .title("Endpoint URL / Agent ID")
@@ -200,13 +206,13 @@ impl AIPage {
             .valign(Align::Center)
             .build();
         url_row.add_suffix(&url_entry);
-        provider_group.add(&url_row);
+        provider_expander.add_row(&url_row);
 
         let key_row = PasswordEntryRow::builder()
             .title("API Key (Optional for local agents / local runners)")
             .text(&saved_cfg.ai_api_key)
             .build();
-        provider_group.add(&key_row);
+        provider_expander.add_row(&key_row);
 
         let model_row = ActionRow::builder()
             .title("Model Identifier")
@@ -218,7 +224,7 @@ impl AIPage {
             .valign(Align::Center)
             .build();
         model_row.add_suffix(&model_entry);
-        provider_group.add(&model_row);
+        provider_expander.add_row(&model_row);
 
         let test_row = ActionRow::builder()
             .title("Connection Diagnostic")
@@ -229,9 +235,9 @@ impl AIPage {
             .valign(Align::Center)
             .build();
         test_row.add_suffix(&test_btn);
-        provider_group.add(&test_row);
+        provider_expander.add_row(&test_row);
 
-        root_box.append(&provider_group);
+        provider_group.add(&provider_expander);
 
         // ---------------------------------------------------------
         // 4. Interactive Linux Assistant
@@ -261,11 +267,14 @@ impl AIPage {
         prompt_row.add_suffix(&ask_btn);
         task_group.add(&prompt_row);
 
-        // Quick Optimization Chips
-        let chips_box = GtkBox::builder()
-            .orientation(Orientation::Horizontal)
-            .spacing(8)
-            .margin_top(4)
+        // Quick Optimization Chips (responsive wrapping FlowBox)
+        let chips_box = FlowBox::builder()
+            .selection_mode(SelectionMode::None)
+            .min_children_per_line(2)
+            .max_children_per_line(6)
+            .row_spacing(6)
+            .column_spacing(6)
+            .margin_top(6)
             .margin_bottom(8)
             .margin_start(12)
             .margin_end(12)
@@ -282,7 +291,7 @@ impl AIPage {
         for (label, query) in chips {
             let chip_btn = Button::builder()
                 .label(label)
-                .css_classes(vec!["pill"])
+                .css_classes(vec!["pill", "chip-button"])
                 .build();
 
             let pe_c = prompt_entry.clone();
@@ -290,7 +299,7 @@ impl AIPage {
             chip_btn.connect_clicked(move |_| {
                 pe_c.set_text(&q_str);
             });
-            chips_box.append(&chip_btn);
+            chips_box.insert(&chip_btn, -1);
         }
         task_group.add(&ActionRow::builder().child(&chips_box).build());
 
@@ -331,6 +340,8 @@ impl AIPage {
         task_group.add(&proposed_row);
 
         root_box.append(&task_group);
+        root_box.append(&provider_group);
+        root_box.append(&agents_group);
 
         let clamp = Clamp::builder()
             .maximum_size(900)

@@ -1,6 +1,6 @@
 [package]
 name = "mithrandir"
-version = "1.1.2"
+version = "1.2.0"
 edition = "2021"
 description = "Modern GNU/Linux Cleaner, Optimizer, Telemetry & Diagnostics in Rust"
 authors = ["Antonio"]

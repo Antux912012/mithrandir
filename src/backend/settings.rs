@@ -104,11 +104,14 @@ impl AppSettings {
     }
 
     pub fn get() -> Self {
-        Self::instance().lock().unwrap().clone()
+        Self::instance()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     pub fn update<F: FnOnce(&mut AppSettings)>(f: F) {
-        let mut lock = Self::instance().lock().unwrap();
+        let mut lock = Self::instance().lock().unwrap_or_else(|e| e.into_inner());
         f(&mut lock);
         lock.save();
     }

@@ -101,63 +101,24 @@ impl ThemeManager {
         if is_dark {
             format!(
                 r#"
-                /* Mithrandir GNOME Accent - Dark Mode ({name}) */
+                /* Mithrandir GNOME / Libadwaita HIG - Dark Mode ({name}) */
                 @define-color accent_color {hex};
                 @define-color accent_bg_color {hex};
-
-                headerbar {{
-                    background: linear-gradient(180deg, {dark_header} 0%, rgba(10, 20, 35, 0.95) 100%);
-                    color: #ffffff;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-                }}
-
-                headerbar windowtitle, headerbar .title, headerbar .subtitle {{
-                    color: #ffffff;
-                }}
-
-                headerbar button {{
-                    color: #ffffff;
-                }}
-
-                headerbar button:hover {{
-                    background: rgba(255, 255, 255, 0.15);
-                    color: #ffffff;
-                }}
-
-                headerbar button.sidebar-toggle-btn {{
-                    min-width: 36px;
-                    min-height: 36px;
-                    padding: 4px;
-                    border-radius: 8px;
-                }}
-
-                .sidebar {{
-                    background: linear-gradient(180deg, {dark_sidebar} 0%, rgba(8, 16, 26, 0.98) 100%);
-                    border-right: 1px solid rgba(255, 255, 255, 0.08);
-                }}
 
                 .navigation-sidebar {{
                     background: transparent;
                 }}
 
                 .navigation-sidebar row {{
-                    color: #f1f5f9;
                     border-radius: 8px;
-                    margin: 2px 6px;
-                    transition: all 150ms ease;
-                }}
-
-                .navigation-sidebar row:hover {{
-                    background: rgba(255, 255, 255, 0.08);
-                    color: #ffffff;
+                    margin: 2px 8px;
+                    transition: background 150ms ease;
                 }}
 
                 .navigation-sidebar row:selected {{
-                    background: {hex};
+                    background: alpha({hex}, 0.88);
                     color: #ffffff;
                     font-weight: 600;
-                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
                 }}
 
                 .navigation-sidebar row:selected label,
@@ -165,21 +126,28 @@ impl ThemeManager {
                     color: #ffffff;
                 }}
 
+                .sidebar-section-header {{
+                    font-size: 11px;
+                    font-weight: 700;
+                    letter-spacing: 0.04em;
+                    opacity: 0.62;
+                    margin: 12px 14px 4px 14px;
+                }}
+
                 .smart-boost-card {{
-                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(0, 0, 0, 0.2) 100%);
-                    border: 1px solid {hex};
+                    background: alpha({hex}, 0.10);
+                    border: 1px solid alpha({hex}, 0.35);
                     border-radius: 12px;
                     padding: 16px;
                 }}
 
-                button.suggested-action {{
-                    background-color: {hex};
-                    color: #ffffff;
-                    font-weight: bold;
+                .metric-tile {{
+                    border-radius: 12px;
                 }}
 
-                button.suggested-action:hover {{
-                    filter: brightness(1.15);
+                .chip-button {{
+                    font-size: 12px;
+                    padding: 4px 12px;
                 }}
 
                 progressbar > trough > progress {{
@@ -189,69 +157,28 @@ impl ThemeManager {
                 "#,
                 name = accent.name,
                 hex = accent.hex,
-                dark_header = accent.dark_header,
-                dark_sidebar = accent.dark_sidebar,
             )
         } else {
             format!(
                 r#"
-                /* Mithrandir GNOME Accent - Light Mode ({name}) */
+                /* Mithrandir GNOME / Libadwaita HIG - Light Mode ({name}) */
                 @define-color accent_color {hex};
                 @define-color accent_bg_color {hex};
-
-                headerbar {{
-                    background: linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%);
-                    color: #1e293b;
-                    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-                }}
-
-                headerbar windowtitle, headerbar .title, headerbar .subtitle {{
-                    color: #1e293b;
-                }}
-
-                headerbar button {{
-                    color: #334155;
-                }}
-
-                headerbar button:hover {{
-                    background: rgba(0, 0, 0, 0.06);
-                    color: #0f172a;
-                }}
-
-                headerbar button.sidebar-toggle-btn {{
-                    min-width: 36px;
-                    min-height: 36px;
-                    padding: 4px;
-                    border-radius: 8px;
-                }}
-
-                .sidebar {{
-                    background: #f1f5f9;
-                    border-right: 1px solid rgba(0, 0, 0, 0.08);
-                }}
 
                 .navigation-sidebar {{
                     background: transparent;
                 }}
 
                 .navigation-sidebar row {{
-                    color: #334155;
                     border-radius: 8px;
-                    margin: 2px 6px;
-                    transition: all 150ms ease;
-                }}
-
-                .navigation-sidebar row:hover {{
-                    background: rgba(0, 0, 0, 0.05);
-                    color: #0f172a;
+                    margin: 2px 8px;
+                    transition: background 150ms ease;
                 }}
 
                 .navigation-sidebar row:selected {{
                     background: {hex};
                     color: #ffffff;
                     font-weight: 600;
-                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
                 }}
 
                 .navigation-sidebar row:selected label,
@@ -259,21 +186,28 @@ impl ThemeManager {
                     color: #ffffff;
                 }}
 
+                .sidebar-section-header {{
+                    font-size: 11px;
+                    font-weight: 700;
+                    letter-spacing: 0.04em;
+                    opacity: 0.62;
+                    margin: 12px 14px 4px 14px;
+                }}
+
                 .smart-boost-card {{
-                    background: linear-gradient(135deg, rgba(0, 0, 0, 0.02) 0%, rgba(0, 0, 0, 0.06) 100%);
-                    border: 1px solid {hex};
+                    background: alpha({hex}, 0.06);
+                    border: 1px solid alpha({hex}, 0.28);
                     border-radius: 12px;
                     padding: 16px;
                 }}
 
-                button.suggested-action {{
-                    background-color: {hex};
-                    color: #ffffff;
-                    font-weight: bold;
+                .metric-tile {{
+                    border-radius: 12px;
                 }}
 
-                button.suggested-action:hover {{
-                    filter: brightness(0.9);
+                .chip-button {{
+                    font-size: 12px;
+                    padding: 4px 12px;
                 }}
 
                 progressbar > trough > progress {{

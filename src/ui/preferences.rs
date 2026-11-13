@@ -199,10 +199,10 @@ impl PreferencesDialog {
         for (tab_id, tab_label, tab_icon) in optional_tabs {
             let is_visible = !disabled_tabs.contains(&tab_id.to_string());
 
+            let escaped_label = gtk4::glib::markup_escape_text(tab_label);
             let tab_switch = SwitchRow::builder()
-                .title(tab_label)
-                .subtitle(format!("Display {} module tab", tab_label))
-                .use_markup(false)
+                .title(escaped_label.as_str())
+                .subtitle(format!("Display {} module tab", escaped_label))
                 .active(is_visible)
                 .build();
             tab_switch.add_prefix(&Image::from_icon_name(tab_icon));

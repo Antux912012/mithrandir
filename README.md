@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.1.2-brightgreen.svg" alt="Version" /></a>
+  <a href="#-installation"><img src="https://img.shields.io/badge/version-1.2.0-brightgreen.svg" alt="Version" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later" /></a>
   <a href="https://gtk.org/"><img src="https://img.shields.io/badge/GUI-GTK%204%20%7C%20Libadwaita-brightgreen.svg" alt="GTK4 & Libadwaita" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.80%2B-informational.svg" alt="Rust 1.80+" /></a>
@@ -25,11 +25,10 @@
 **Mithrandir** is a blazing-fast, native system optimizer, deep cleaner, telemetry monitor, BORE kernel scheduler controller, and hardware power optimizer written in **Rust** with **GTK4** and **Libadwaita**, engineered for instant startup, minimal memory footprint, and robust multi-distribution compatibility.
 
 > [!NOTE]
-> **What's New in v1.1.2:**
-> - 🚀 **Streamlined Kernel & Power Management**: Focused kernel tuning around BORE (`sched_bore`), CPU frequency scaling governors, Energy Performance Preferences (EPP), Turbo Boost, and PCIe ASPM (removed `sched-ext` / SCX integration and bundled archives).
-> - 📦 **Flathub Policy & AppStream 1.0 Compliance**: Updated AppStream metadata (`io.github.antux912012.Mithrandir.metainfo.xml`), sandbox permissions, and Flatpak packaging to adhere to Flathub guidelines.
-> - 🧹 **Hardened Flatpak Cache Safety**: Strict XDG sandbox boundary validation ensuring `config/`, `data/`, and `.local/state/` are never touched.
-> - ⚡ **Mithrandir Presets**: One-click switching across 4 profiles (Battery/Silent, Balanced, Low-Latency/Workstation, Gaming).
+> **What's New in v1.2.0:**
+> - 🎨 **GNOME / Libadwaita HIG UI Redesign**: Native `adw::NavigationSplitView` with grouped sidebar sections (`Overview & Care`, `Performance & Hardware`, `System & Recovery`), responsive `720sp` mobile/tablet breakpoint, authentic flat Libadwaita surface styling, and clean result-first layouts.
+> - 🤖 **Result-First AI Assistant**: One-click System Health Triage and Interactive Assistant promoted to the top, wrapping `FlowBox` quick-action chips, and collapsed provider/model configuration expander.
+> - 🛡️ **Critical Bug & Safety Fixes**: Safe Snap `.cache`-only cleaning (preserving Snap configs/profiles), complete Browser cache coverage (including Brave & Edge), poisoned-mutex resilience, RAII Smart Boost guard, normalized `SafetyGuard` command checks, and Pango markup escaping.
 
 ---
 
@@ -110,7 +109,7 @@ Pre-built standalone packages are ready in the repository root:
 ### Flatpak Bundle (`.flatpak`)
 Install the sandboxed single-file bundle:
 ```bash
-flatpak install --user mithrandir_1.1.2.flatpak
+flatpak install --user mithrandir_1.2.0.flatpak
 ```
 Run via Flatpak:
 ```bash
@@ -119,14 +118,14 @@ flatpak run io.github.antux912012.Mithrandir
 
 ### Debian / Ubuntu Package (`.deb`)
 ```bash
-sudo dpkg -i mithrandir_1.1.2_amd64.deb
+sudo dpkg -i mithrandir_1.2.0_amd64.deb
 ```
 
 ### AppImage (`.AppImage`)
 Run instantly on any modern GNU/Linux distribution:
 ```bash
-chmod +x ./mithrandir-1.1.2-x86_64.AppImage
-./mithrandir-1.1.2-x86_64.AppImage
+chmod +x ./mithrandir-1.2.0-x86_64.AppImage
+./mithrandir-1.2.0-x86_64.AppImage
 ```
 
 ### Arch Linux / CachyOS (AUR)

@@ -89,6 +89,11 @@ impl KernelPowerPage {
                 apply_btn.add_css_class("suggested-action");
             }
 
+            let btn_for_row = apply_btn.clone();
+            row.connect_activated(move |_| {
+                btn_for_row.emit_clicked();
+            });
+
             preset_btns.borrow_mut().push((preset, apply_btn.clone()));
             row.add_suffix(&apply_btn);
             preset_group.add(&row);

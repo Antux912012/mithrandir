@@ -18,12 +18,8 @@ pub struct LocalServerDetector;
 impl LocalServerDetector {
     /// Detects if a TCP port on localhost is accepting connections.
     pub fn is_port_open(port: u16) -> bool {
-        let addr = format!("127.0.0.1:{}", port);
-        TcpStream::connect_timeout(
-            &addr.parse().unwrap(),
-            Duration::from_millis(150),
-        )
-        .is_ok()
+        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+        TcpStream::connect_timeout(&addr, Duration::from_millis(150)).is_ok()
     }
 
     /// Queries models from a local OpenAI-compatible endpoint.

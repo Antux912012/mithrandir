@@ -31,12 +31,20 @@ static IS_BOOSTING: AtomicBool = AtomicBool::new(false);
 static LAST_AUTO_BOOST: Mutex<Option<Instant>> = Mutex::new(None);
 static LAST_TRIGGER: Mutex<Option<Instant>> = Mutex::new(None);
 
+struct BoostGuard;
+
+impl Drop for BoostGuard {
+    fn drop(&mut self) {
+        IS_BOOSTING.store(false, Ordering::SeqCst);
+    }
+}
+
 pub struct SmartBoostEngine;
 
 impl SmartBoostEngine {
     /// Enforces a debounce window on manual or tray boost actions. Returns true if allowed.
     pub fn check_debounce(min_interval_ms: u64) -> bool {
-        let mut lock = LAST_TRIGGER.lock().unwrap();
+        let mut lock = LAST_TRIGGER.lock().unwrap_or_else(|e| e.into_inner());
         let now = Instant::now();
         if let Some(last) = *lock {
             if now.duration_since(last) < Duration::from_millis(min_interval_ms) {
@@ -48,9 +56,12 @@ impl SmartBoostEngine {
     }
 
     pub fn get_temporary_files_size() -> (u64, usize) {
-        let home = std::env::var("HOME").unwrap_or_default();
-        let thumb_path = Path::new(&home).join(".cache/thumbnails");
-        let (thumb_bytes, thumb_count) = CleanerEngine::scan_path(&thumb_path);
+        let (thumb_bytes, thumb_count) = match std::env::var("HOME") {
+            Ok(home) if !home.is_empty() => {
+                CleanerEngine::scan_path(&Path::new(&home).join(".cache/thumbnails"))
+            }
+            _ => (0, 0),
+        };
         let (tmp_bytes, tmp_count) = CleanerEngine::scan_user_tmp();
 
         (thumb_bytes + tmp_bytes, thumb_count + tmp_count)
@@ -92,15 +103,19 @@ impl SmartBoostEngine {
                 current_ram_percent: mem.percent,
             };
         }
+        let _guard = BoostGuard;
 
         let mem_before = SystemMonitor::get_memory_info();
         let (temp_before, _) = Self::get_temporary_files_size();
 
         // 1. Clean temporary files & thumbnails
         if clean_temp {
-            let home = std::env::var("HOME").unwrap_or_default();
-            let thumb_path = Path::new(&home).join(".cache/thumbnails");
-            CleanerEngine::clean_path(&thumb_path);
+            if let Ok(home) = std::env::var("HOME") {
+                if !home.is_empty() {
+                    let thumb_path = Path::new(&home).join(".cache/thumbnails");
+                    CleanerEngine::clean_path(&thumb_path);
+                }
+            }
             CleanerEngine::clean_user_tmp();
         }
 
@@ -121,8 +136,6 @@ impl SmartBoostEngine {
         let ram_reclaimed = (mem_before.used_mb - mem_after.used_mb).max(0.0);
         let disk_freed_mb = ((temp_before.saturating_sub(temp_after)) as f64 / (1024.0 * 1024.0) * 10.0).round() / 10.0;
 
-        IS_BOOSTING.store(false, Ordering::SeqCst);
-
         BoostResult {
             success: true,
             already_running: false,
@@ -142,7 +155,7 @@ impl SmartBoostEngine {
         let cooldown = Duration::from_secs(cooldown_minutes * 60);
 
         {
-            let lock = LAST_AUTO_BOOST.lock().unwrap();
+            let lock = LAST_AUTO_BOOST.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(last) = *lock {
                 if now.duration_since(last) < cooldown {
                     return None;
@@ -155,7 +168,7 @@ impl SmartBoostEngine {
         let temp_exceeded = status.temp_size_mb >= temp_threshold_mb;
 
         if ram_exceeded || temp_exceeded {
-            *LAST_AUTO_BOOST.lock().unwrap() = Some(now);
+            *LAST_AUTO_BOOST.lock().unwrap_or_else(|e| e.into_inner()) = Some(now);
             let res = Self::execute_boost(temp_exceeded, ram_exceeded);
             if !res.already_running {
                 return Some(res);

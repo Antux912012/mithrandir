@@ -53,6 +53,7 @@ impl MetricTile {
             .margin_end(4)
             .build();
         container.add_css_class("card");
+        container.add_css_class("metric-tile");
 
         // Header with icon and title
         let header = GtkBox::builder()
@@ -240,7 +241,7 @@ impl DashboardPage {
         stats_row.append(&temp_box);
 
         let boost_btn = Button::builder()
-            .label("🚀 Boost")
+            .label("Boost Memory")
             .valign(Align::Center)
             .build();
         boost_btn.add_css_class("suggested-action");
@@ -322,7 +323,7 @@ impl DashboardPage {
         // 2. Real-Time System Sensors (9 Square MetricTile Cards)
         let tile_group = PreferencesGroup::builder()
             .title("Real-Time System Sensors")
-            .description("Live telemetry updating every 3 seconds (Stacer-grade sensor suite)")
+            .description("Live hardware telemetry • 3s interval")
             .build();
 
         let flow_box = FlowBox::builder()
@@ -526,7 +527,7 @@ impl DashboardPage {
                 glib::timeout_add_local(Duration::from_millis(100), move || {
                     if let Ok(res) = rx.try_recv() {
                         btn.set_sensitive(true);
-                        btn.set_label("🚀 Boost");
+                        btn.set_label("Boost Memory");
                         is_boosting.store(false, Ordering::SeqCst);
 
                         if res.already_running {
@@ -684,13 +685,14 @@ impl DashboardPage {
 
                     if let Some(gpu1) = snap.gpus.get(1) {
                         let name1: String = gpu1.name.chars().take(16).collect();
+                        tile_gpu1.container.set_visible(true);
                         tile_gpu1.set_data(
                             &format!("{:.0}%", gpu1.load_percent),
                             (gpu1.load_percent as f64) / 100.0,
                             &name1,
                         );
                     } else {
-                        tile_gpu1.set_data("N/A", 0.0, "Integrated / None");
+                        tile_gpu1.container.set_visible(false);
                     }
 
                     // 9. Update System Uptime Row

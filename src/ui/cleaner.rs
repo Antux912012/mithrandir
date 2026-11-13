@@ -66,9 +66,8 @@ impl CleanerPage {
 
         for cat in &initial_cats {
             let row = ActionRow::builder()
-                .title(&cat.name)
-                .subtitle(&cat.description)
-                .use_markup(false)
+                .title(gtk4::glib::markup_escape_text(&cat.name))
+                .subtitle(gtk4::glib::markup_escape_text(&cat.description))
                 .build();
 
             let check = CheckButton::builder()

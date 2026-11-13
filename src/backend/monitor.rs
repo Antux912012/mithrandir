@@ -120,7 +120,7 @@ pub struct SystemMonitor;
 
 impl SystemMonitor {
     pub fn get_memory_info() -> MemoryInfo {
-        let mut lock = get_system().lock().unwrap();
+        let mut lock = get_system().lock().unwrap_or_else(|e| e.into_inner());
         lock.refresh_memory();
 
         let total_bytes = lock.total_memory();
@@ -149,7 +149,7 @@ impl SystemMonitor {
     }
 
     pub fn get_cpu_info() -> CpuInfo {
-        let mut lock = get_system().lock().unwrap();
+        let mut lock = get_system().lock().unwrap_or_else(|e| e.into_inner());
         lock.refresh_cpu_usage();
 
         let usage_percent = lock.global_cpu_usage();
@@ -193,7 +193,7 @@ impl SystemMonitor {
 
     pub fn get_disks_info() -> Vec<DiskPartition> {
         let disks_lock = DISKS_MUTEX.get_or_init(|| Mutex::new(Disks::new_with_refreshed_list()));
-        let mut disks = disks_lock.lock().unwrap();
+        let mut disks = disks_lock.lock().unwrap_or_else(|e| e.into_inner());
         disks.refresh(true);
         disks
             .iter()
@@ -491,7 +491,7 @@ impl SystemMonitor {
 
     pub fn get_network_rate() -> NetworkRate {
         let lock = NET_PREV.get_or_init(|| Mutex::new(None));
-        let mut prev = lock.lock().unwrap();
+        let mut prev = lock.lock().unwrap_or_else(|e| e.into_inner());
         let now = Instant::now();
 
         let mut cur_rx = 0u64;

@@ -123,6 +123,70 @@ impl CleanerEngine {
             .collect()
     }
 
+    fn browser_cache_dirs(home: &Path) -> [PathBuf; 5] {
+        [
+            home.join(".cache/mozilla"),
+            home.join(".cache/google-chrome"),
+            home.join(".cache/chromium"),
+            home.join(".cache/BraveSoftware"),
+            home.join(".cache/microsoft-edge"),
+        ]
+    }
+
+    fn dev_cache_dirs(home: &Path) -> [PathBuf; 3] {
+        [
+            home.join(".cache/pip"),
+            home.join(".npm/_cacache"),
+            home.join(".cargo/registry/cache"),
+        ]
+    }
+
+    fn stremio_cache_dirs(home: &Path) -> [PathBuf; 2] {
+        [
+            home.join(".config/stremio/stremio-cache"),
+            PathBuf::from("/tmp/stremio-cache"),
+        ]
+    }
+
+    /// Returns only `.cache` directories inside `~/snap/<app>/<rev>/.cache` (including `common/.cache`),
+    /// preserving all Snap application user configs and profiles.
+    pub fn snap_cache_dirs(snap_root: &Path) -> Vec<PathBuf> {
+        let mut dirs = Vec::new();
+        let Ok(apps) = fs::read_dir(snap_root) else {
+            return dirs;
+        };
+        for app_entry in apps.flatten() {
+            let app_path = app_entry.path();
+            if !app_path.is_dir() {
+                continue;
+            }
+            let Ok(revs) = fs::read_dir(&app_path) else {
+                continue;
+            };
+            for rev_entry in revs.flatten() {
+                let cache_dir = rev_entry.path().join(".cache");
+                if cache_dir.is_dir() {
+                    dirs.push(cache_dir);
+                }
+            }
+        }
+        dirs
+    }
+
+    fn sum_dirs(dirs: &[PathBuf]) -> (u64, usize) {
+        dirs.iter().fold((0u64, 0usize), |(sb, sc), p| {
+            let (b, c) = Self::scan_path(p);
+            (sb + b, sc + c)
+        })
+    }
+
+    fn clean_dirs(dirs: &[PathBuf]) -> (u64, usize) {
+        dirs.iter().fold((0u64, 0usize), |(sb, sc), p| {
+            let (b, c) = Self::clean_path(p);
+            (sb + b, sc + c)
+        })
+    }
+
     pub fn get_categories() -> Vec<CleanCategory> {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
         let home_ref = PathBuf::from(&home);
@@ -136,31 +200,18 @@ impl CleanerEngine {
                         let exclusions = ["thumbnails", "mozilla", "google-chrome", "chromium", "BraveSoftware", "microsoft-edge", "pip"];
                         Self::scan_path_excluding(&cat.path, &exclusions)
                     }
-                    "browser_cache" => {
-                        let (s1, c1) = Self::scan_path(&home_ref.join(".cache/mozilla"));
-                        let (s2, c2) = Self::scan_path(&home_ref.join(".cache/google-chrome"));
-                        let (s3, c3) = Self::scan_path(&home_ref.join(".cache/chromium"));
-                        (s1 + s2 + s3, c1 + c2 + c3)
-                    }
-                    "dev_cache" => {
-                        let (s1, c1) = Self::scan_path(&home_ref.join(".cache/pip"));
-                        let (s2, c2) = Self::scan_path(&home_ref.join(".npm/_cacache"));
-                        let (s3, c3) = Self::scan_path(&home_ref.join(".cargo/registry/cache"));
-                        (s1 + s2 + s3, c1 + c2 + c3)
-                    }
+                    "browser_cache" => Self::sum_dirs(&Self::browser_cache_dirs(&home_ref)),
+                    "stremio_cache" => Self::sum_dirs(&Self::stremio_cache_dirs(&home_ref)),
+                    "dev_cache" => Self::sum_dirs(&Self::dev_cache_dirs(&home_ref)),
                     "flatpak_cache" => crate::cleaners::scan_flatpak_cache(&cat.path),
+                    "snap_cache" => Self::sum_dirs(&Self::snap_cache_dirs(&cat.path)),
                     "package_cache" => {
-                        let mut total_s = 0;
-                        let mut total_c = 0;
-                        for p in Self::PKG_CACHE_DIRS {
-                            let pb = Path::new(p);
-                            if pb.exists() {
-                                let (s, c) = Self::scan_path(pb);
-                                total_s += s;
-                                total_c += c;
-                            }
-                        }
-                        (total_s, total_c)
+                        let pkg_dirs: Vec<PathBuf> = Self::PKG_CACHE_DIRS
+                            .iter()
+                            .map(PathBuf::from)
+                            .filter(|p| p.exists())
+                            .collect();
+                        Self::sum_dirs(&pkg_dirs)
                     }
                     _ => Self::scan_path(&cat.path),
                 };
@@ -214,7 +265,7 @@ impl CleanerEngine {
             return (0, 0);
         }
 
-        let files: Vec<PathBuf> = WalkDir::new(path)
+        let files: Vec<(PathBuf, u64)> = WalkDir::new(path)
             .min_depth(1)
             .into_iter()
             .filter_entry(|e| {
@@ -227,13 +278,15 @@ impl CleanerEngine {
             })
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_file())
-            .map(|e| e.path().to_path_buf())
+            .map(|e| {
+                let len = e.metadata().map(|m| m.len()).unwrap_or(0);
+                (e.into_path(), len)
+            })
             .collect();
 
         files
             .into_par_iter()
-            .map(|f| {
-                let size = f.metadata().map(|m| m.len()).unwrap_or(0);
+            .map(|(f, size)| {
                 if fs::remove_file(&f).is_ok() {
                     (size, 1usize)
                 } else {
@@ -291,31 +344,24 @@ impl CleanerEngine {
                 let exclusions = ["thumbnails", "mozilla", "google-chrome", "chromium", "BraveSoftware", "microsoft-edge", "pip"];
                 Self::clean_path_excluding(&home_p.join(".cache"), &exclusions)
             }
-            "browser_cache" => {
-                let (b1, c1) = Self::clean_path(&home_p.join(".cache/mozilla"));
-                let (b2, c2) = Self::clean_path(&home_p.join(".cache/google-chrome"));
-                let (b3, c3) = Self::clean_path(&home_p.join(".cache/chromium"));
-                (b1 + b2 + b3, c1 + c2 + c3)
-            }
-            "stremio_cache" => {
-                let (b1, c1) = Self::clean_path(&home_p.join(".config/stremio/stremio-cache"));
-                let (b2, c2) = Self::clean_path(&PathBuf::from("/tmp/stremio-cache"));
-                (b1 + b2, c1 + c2)
-            }
-            "dev_cache" => {
-                let (b1, c1) = Self::clean_path(&home_p.join(".cache/pip"));
-                let (b2, c2) = Self::clean_path(&home_p.join(".npm/_cacache"));
-                let (b3, c3) = Self::clean_path(&home_p.join(".cargo/registry/cache"));
-                (b1 + b2 + b3, c1 + c2 + c3)
-            }
+            "browser_cache" => Self::clean_dirs(&Self::browser_cache_dirs(&home_p)),
+            "stremio_cache" => Self::clean_dirs(&Self::stremio_cache_dirs(&home_p)),
+            "dev_cache" => Self::clean_dirs(&Self::dev_cache_dirs(&home_p)),
             "flatpak_cache" => crate::cleaners::clean_flatpak_cache(&home_p.join(".var/app")),
-            "snap_cache" => Self::clean_path(&home_p.join("snap")),
+            "snap_cache" => Self::clean_dirs(&Self::snap_cache_dirs(&home_p.join("snap"))),
             "trash" => Self::clean_path(&home_p.join(".local/share/Trash")),
             "tmp" => Self::clean_user_tmp(),
             "package_cache" => {
+                let pkg_dirs: Vec<PathBuf> = Self::PKG_CACHE_DIRS
+                    .iter()
+                    .map(PathBuf::from)
+                    .filter(|p| p.exists())
+                    .collect();
+                let (before_b, before_c) = Self::sum_dirs(&pkg_dirs);
                 let _ = HostBridge::run_privileged(&["sh", "-c", "apt-get clean 2>/dev/null || dnf clean all 2>/dev/null || pacman -Scc --noconfirm 2>/dev/null || true"]);
                 let _ = HostBridge::run_privileged(&["journalctl", "--vacuum-time=7d"]);
-                (0, 0)
+                let (after_b, after_c) = Self::sum_dirs(&pkg_dirs);
+                (before_b.saturating_sub(after_b), before_c.saturating_sub(after_c))
             }
             _ => (0, 0),
         };
