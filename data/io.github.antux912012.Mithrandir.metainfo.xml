@@ -10,7 +10,7 @@
       Mithrandir is a high-performance system maintenance suite, deep cache cleaner, and hardware power utility written in Rust with GTK4 and Libadwaita. It delivers instantaneous cleanup scans, cache pruning, hardware power management, and granular control over startup services and system processes without background resource overhead. (Independent project; not affiliated with or endorsed by CachyOS, GNOME, or Debian.)
     </p>
     <p>
-      Designed with a focus on safety and transparency, Mithrandir protects critical operating system paths, respects user sandboxes, and runs diagnostic telemetry off the main UI thread for stutter-free operation.
+      Designed with a focus on safety and transparency, Mithrandir protects critical operating system paths, respects user sandboxes, and runs diagnostic telemetry off the main UI thread for stutter-free operation. Developed and maintained by Antonio De Gaetano, creator of Imladris and RecGo.
     </p>
     <ul>
       <li>High-Throughput Cleaner: Multi-threaded cleanup for package caches, thumbnails, application logs, and Flatpak caches</li>
@@ -91,6 +91,16 @@
   </branding>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="1.3.2" date="2026-11-20">
+      <description>
+        <p>Mithrandir v1.3.2 Reliability, Security &amp; Performance Release (by Antonio De Gaetano, developer of Imladris and RecGo):</p>
+        <ul>
+          <li>Flatpak &amp; /tmp Cleaner Hardening: Scoped Flatpak cache scans/cleanups strictly to target directories, enforced symlink_metadata() checks, and skipped active X11/Wayland/PipeWire/SSH session files in /tmp.</li>
+          <li>Error Propagation &amp; UI Feedback: Propagated hardware power/kernel errors, surfaced systemd service and package-cache errors via Libadwaita Toasts, and validated BTRFS snapshot names.</li>
+          <li>Security &amp; Performance: Kept AI API keys out of curl process arguments via 0600 stdin config, paused background dashboard polling when hidden in tray, throttled /tmp scans to 30s, parallelized local AI server detection, and preserved persistent sysinfo CPU% deltas.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.3.1" date="2026-11-13">
       <description>
         <p>Mithrandir v1.3.1 Bundled Icon Pack Release:</p>

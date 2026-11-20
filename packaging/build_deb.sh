@@ -15,7 +15,7 @@ echo "==> Building Mithrandir Debian package (${DEB_NAME})..."
 
 if [[ ! -f "${ROOT_DIR}/target/release/mithrandir" ]]; then
   echo "==> Compiling release binary..."
-  podman run --rm --userns=keep-id \
+  podman run --rm --network=none --userns=keep-id \
     -v mithrandir-cargo-cache:/var/tmp/cargo:Z -e CARGO_HOME=/var/tmp/cargo \
     -v "${ROOT_DIR}:/workspace:Z" -w /workspace localhost/dev-fedora \
     cargo build --release --features gui
@@ -45,7 +45,7 @@ Version: ${VERSION}
 Section: utils
 Priority: optional
 Architecture: amd64
-Maintainer: Antonio <antux912012@users.noreply.github.com>
+Maintainer: Antonio De Gaetano <antux912012@users.noreply.github.com>
 Depends: libgtk-4-1, libadwaita-1-0, libglib2.0-0, policykit-1 | pkexec, hicolor-icon-theme
 Homepage: https://github.com/Antux912012/mithrandir
 Description: Native GTK4 & Libadwaita GNU/Linux System Optimizer & Cleaner
@@ -53,7 +53,7 @@ Description: Native GTK4 & Libadwaita GNU/Linux System Optimizer & Cleaner
  BORE scheduler manager, and hardware power utility written in Rust.
 EOF
 
-podman run --rm --userns=keep-id \
+podman run --rm --network=none --userns=keep-id \
   -v "${ROOT_DIR}:/workspace:Z" -w /workspace localhost/dev-debian \
   dpkg-deb --build --root-owner-group "target/pkg-deb" "${DEB_NAME}"
 

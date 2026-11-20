@@ -15,16 +15,16 @@ echo "==> Staging Mithrandir Flatpak build (v${VERSION})..."
 # Ensure release binary exists
 if [[ ! -f "${ROOT_DIR}/target/release/mithrandir" ]]; then
   echo "==> Building Release Binary with GTK4 and Libadwaita..."
-  podman run --rm --userns=keep-id \
+  podman run --rm --network=none --userns=keep-id \
     -v mithrandir-cargo-cache:/var/tmp/cargo:Z -e CARGO_HOME=/var/tmp/cargo \
     -v "${ROOT_DIR}:/workspace:Z" -w /workspace localhost/dev-fedora \
     cargo build --release --features gui
 fi
 
 echo "==> Validating Desktop Entry and AppStream MetaInfo inside Podman container..."
-podman run --rm --userns=keep-id \
+podman run --rm --network=none --userns=keep-id \
   -v "${ROOT_DIR}:/workspace:Z" -w /workspace localhost/dev-fedora \
-  bash -c "desktop-file-validate data/${APP_ID}.desktop && appstreamcli validate --explain data/${APP_ID}.metainfo.xml"
+  bash -c "desktop-file-validate data/${APP_ID}.desktop && appstreamcli validate --no-net --explain data/${APP_ID}.metainfo.xml"
 
 BUILD_DIR="${ROOT_DIR}/target/pkg-flatpak"
 REPO_DIR="${ROOT_DIR}/target/repo-flatpak"
@@ -53,7 +53,7 @@ glib-compile-schemas "${BUILD_DIR}/files/share/glib-2.0/schemas"
 
 # Generate AppStream catalog metadata and cached icons for Software Center
 echo "==> Composing AppStream metadata catalog for Software Centers..."
-podman run --rm --userns=keep-id \
+podman run --rm --network=none --userns=keep-id \
   -v "${ROOT_DIR}:/workspace:Z" localhost/dev-fedora \
   appstream-compose --prefix=/workspace/target/pkg-flatpak/files --basename="${APP_ID}" --origin=flatpak "${APP_ID}"
 

@@ -12,7 +12,7 @@ echo "==> Building Mithrandir RPM package (${RPM_NAME})..."
 
 if [[ ! -f "${ROOT_DIR}/target/release/mithrandir" ]]; then
   echo "==> Release binary not found, compiling first..."
-  podman run --rm --userns=keep-id \
+  podman run --rm --network=none --userns=keep-id \
     -v mithrandir-cargo-cache:/var/tmp/cargo:Z -e CARGO_HOME=/var/tmp/cargo \
     -v "${ROOT_DIR}:/workspace:Z" -w /workspace localhost/dev-fedora \
     cargo build --release --features gui
@@ -70,7 +70,7 @@ cp -r /workspace/data/icons/hicolor/* %{buildroot}%{_datadir}/icons/hicolor/
 %{_datadir}/icons/hicolor/*
 EOF
 
-podman run --rm --userns=keep-id \
+podman run --rm --network=none --userns=keep-id \
   -v "${ROOT_DIR}:/workspace:Z" -w /workspace localhost/dev-fedora \
   rpmbuild -bb --define "_topdir /workspace/target/pkg-rpm" --target x86_64 "/workspace/target/pkg-rpm/SPECS/mithrandir.spec"
 
