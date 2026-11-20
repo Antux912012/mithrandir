@@ -118,6 +118,96 @@ impl AIClient {
         )
     }
 
+    fn run_curl_post(endpoint: &str, headers: &[(&str, &str)], body: &str) -> Result<std::process::Output, String> {
+        let mut cfg_content = String::new();
+        for (k, v) in headers {
+            let escaped = v.replace('\\', "\\\\").replace('"', "\\\"");
+            cfg_content.push_str(&format!("header = \"{}: {}\"\n", k, escaped));
+        }
+
+        // Write secret headers to a 0600 temp file when running on host so keys stay out of /proc/pid/cmdline
+        let cfg_path = if !HostBridge::is_flatpak() {
+            let p = std::env::temp_dir().join(format!("mithrandir-curl-{}.cfg", std::process::id()));
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .mode(0o600)
+                    .open(&p)
+                {
+                    if f.write_all(cfg_content.as_bytes()).is_ok() {
+                        Some(p)
+                    } else {
+                        let _ = std::fs::remove_file(&p);
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                if std::fs::write(&p, cfg_content.as_bytes()).is_ok() {
+                    Some(p)
+                } else {
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        let mut args: Vec<String> = vec![
+            "-s".to_string(),
+            "-X".to_string(),
+            "POST".to_string(),
+            "--max-time".to_string(),
+            "45".to_string(),
+        ];
+        if let Some(ref p) = cfg_path {
+            args.push("-K".to_string());
+            args.push(p.to_string_lossy().to_string());
+        } else {
+            for (k, v) in headers {
+                args.push("-H".to_string());
+                args.push(format!("{}: {}", k, v));
+            }
+        }
+        args.push(endpoint.to_string());
+        args.push("--data-binary".to_string());
+        args.push("@-".to_string());
+
+        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let mut cmd = HostBridge::wrap_command("curl", &arg_refs);
+        cmd.stdin(Stdio::piped());
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+
+        let spawn_res = cmd.spawn();
+        let mut child = match spawn_res {
+            Ok(c) => c,
+            Err(e) => {
+                if let Some(ref p) = cfg_path {
+                    let _ = std::fs::remove_file(p);
+                }
+                return Err(format!("Failed to spawn curl: {}", e));
+            }
+        };
+
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(body.as_bytes());
+        }
+
+        let output = child.wait_with_output();
+        if let Some(ref p) = cfg_path {
+            let _ = std::fs::remove_file(p);
+        }
+        output.map_err(|e| format!("HTTP request failed: {}", e))
+    }
+
     fn call_openai_compatible(&self, messages: &[ChatMessage]) -> Result<ChatResponse, String> {
         let endpoint = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
 
@@ -139,47 +229,22 @@ impl AIClient {
         });
 
         let body = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
-
-        let mut headers = vec![
-            ("Content-Type", "application/json"),
-            ("User-Agent", "Mithrandir/1.1.2"),
-        ];
-
+        let ua = format!("Mithrandir/{}", env!("CARGO_PKG_VERSION"));
         let auth_hdr = if !self.api_key.is_empty() {
             format!("Bearer {}", self.api_key)
         } else {
             String::new()
         };
 
+        let mut headers = vec![
+            ("Content-Type", "application/json"),
+            ("User-Agent", ua.as_str()),
+        ];
         if !auth_hdr.is_empty() {
-            headers.push(("Authorization", &auth_hdr));
+            headers.push(("Authorization", auth_hdr.as_str()));
         }
 
-        let mut cmd = HostBridge::wrap_command("curl", &[
-            "-s",
-            "-X",
-            "POST",
-            "--max-time",
-            "45",
-            &endpoint,
-            "--data-binary",
-            "@-",
-        ]);
-
-        for (k, v) in headers {
-            cmd.args(["-H", &format!("{}: {}", k, v)]);
-        }
-
-        cmd.stdin(Stdio::piped());
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-
-        let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn curl: {}", e))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(body.as_bytes());
-        }
-
-        let output = child.wait_with_output().map_err(|e| format!("HTTP request failed: {}", e))?;
+        let output = Self::run_curl_post(&endpoint, &headers, &body)?;
         if !output.status.success() {
             return Err(format!("curl error status: {:?}", output.status.code()));
         }
@@ -210,10 +275,9 @@ impl AIClient {
 
     fn call_gemini(&self, messages: &[ChatMessage]) -> Result<ChatResponse, String> {
         let endpoint = format!(
-            "{}/models/{}:generateContent?key={}",
+            "{}/models/{}:generateContent",
             self.base_url.trim_end_matches('/'),
             self.model,
-            self.api_key
         );
 
         let contents: Vec<serde_json::Value> = messages
@@ -236,30 +300,12 @@ impl AIClient {
         });
 
         let body = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
+        let headers = [
+            ("Content-Type", "application/json"),
+            ("x-goog-api-key", self.api_key.as_str()),
+        ];
 
-        let mut cmd = HostBridge::wrap_command("curl", &[
-            "-s",
-            "-X",
-            "POST",
-            "--max-time",
-            "45",
-            "-H",
-            "Content-Type: application/json",
-            &endpoint,
-            "--data-binary",
-            "@-",
-        ]);
-
-        cmd.stdin(Stdio::piped());
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-
-        let mut child = cmd.spawn().map_err(|e| format!("Failed to call curl: {}", e))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(body.as_bytes());
-        }
-
-        let output = child.wait_with_output().map_err(|e| format!("HTTP request failed: {}", e))?;
+        let output = Self::run_curl_post(&endpoint, &headers, &body)?;
         let resp_text = String::from_utf8_lossy(&output.stdout);
         let val: serde_json::Value = serde_json::from_str(&resp_text)
             .map_err(|_| format!("Invalid Gemini JSON: {}", resp_text.trim()))?;
@@ -304,34 +350,13 @@ impl AIClient {
         });
 
         let body = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
+        let headers = [
+            ("Content-Type", "application/json"),
+            ("x-api-key", self.api_key.as_str()),
+            ("anthropic-version", "2023-06-01"),
+        ];
 
-        let mut cmd = HostBridge::wrap_command("curl", &[
-            "-s",
-            "-X",
-            "POST",
-            "--max-time",
-            "45",
-            "-H",
-            "Content-Type: application/json",
-            "-H",
-            &format!("x-api-key: {}", self.api_key),
-            "-H",
-            "anthropic-version: 2023-06-01",
-            &endpoint,
-            "--data-binary",
-            "@-",
-        ]);
-
-        cmd.stdin(Stdio::piped());
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-
-        let mut child = cmd.spawn().map_err(|e| format!("Failed to call curl: {}", e))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(body.as_bytes());
-        }
-
-        let output = child.wait_with_output().map_err(|e| format!("HTTP request failed: {}", e))?;
+        let output = Self::run_curl_post(&endpoint, &headers, &body)?;
         let resp_text = String::from_utf8_lossy(&output.stdout);
         let val: serde_json::Value = serde_json::from_str(&resp_text)
             .map_err(|_| format!("Invalid Claude response: {}", resp_text.trim()))?;

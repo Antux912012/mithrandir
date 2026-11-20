@@ -203,7 +203,11 @@ impl CleanerEngine {
                     "browser_cache" => Self::sum_dirs(&Self::browser_cache_dirs(&home_ref)),
                     "stremio_cache" => Self::sum_dirs(&Self::stremio_cache_dirs(&home_ref)),
                     "dev_cache" => Self::sum_dirs(&Self::dev_cache_dirs(&home_ref)),
-                    "flatpak_cache" => crate::cleaners::scan_flatpak_cache(&cat.path),
+                    "flatpak_cache" => {
+                        let (app_b, app_c) = crate::cleaners::scan_flatpak_cache(&cat.path);
+                        let (sys_b, sys_c) = crate::cleaners::scan_system_flatpak_caches();
+                        (app_b + sys_b, app_c + sys_c)
+                    }
                     "snap_cache" => Self::sum_dirs(&Self::snap_cache_dirs(&cat.path)),
                     "package_cache" => {
                         let pkg_dirs: Vec<PathBuf> = Self::PKG_CACHE_DIRS
@@ -224,10 +228,35 @@ impl CleanerEngine {
             .collect()
     }
 
+    #[cfg(unix)]
+    fn is_safe_tmp_entry(entry: &walkdir::DirEntry, current_uid: u32) -> bool {
+        use std::os::unix::fs::MetadataExt;
+        let fname = entry.file_name().to_string_lossy();
+        if entry.depth() == 1
+            && (fname.starts_with(".X")
+                || fname == ".ICE-unix"
+                || fname.starts_with("ssh-")
+                || fname.starts_with("tmux-")
+                || fname.starts_with("wayland-")
+                || fname.starts_with("pulse-")
+                || fname.starts_with("pipewire-")
+                || fname.starts_with("dbus-"))
+        {
+            return false;
+        }
+        if let Ok(meta) = entry.path().symlink_metadata() {
+            if entry.file_type().is_dir() {
+                return meta.uid() == current_uid;
+            }
+            meta.is_file() && meta.uid() == current_uid
+        } else {
+            false
+        }
+    }
+
     pub fn scan_user_tmp() -> (u64, usize) {
         #[cfg(unix)]
         {
-            use std::os::unix::fs::MetadataExt;
             let current_uid = unsafe { libc::getuid() };
             let tmp = Path::new("/tmp");
             if !tmp.exists() {
@@ -237,16 +266,11 @@ impl CleanerEngine {
             WalkDir::new(tmp)
                 .min_depth(1)
                 .into_iter()
+                .filter_entry(|e| Self::is_safe_tmp_entry(e, current_uid))
                 .par_bridge()
                 .filter_map(|e| e.ok())
-                .filter(|e| {
-                    if let Ok(meta) = e.path().symlink_metadata() {
-                        meta.is_file() && meta.uid() == current_uid
-                    } else {
-                        false
-                    }
-                })
-                .map(|e| e.metadata().map(|m| m.len()).unwrap_or(0))
+                .filter(|e| e.file_type().is_file())
+                .map(|e| e.path().symlink_metadata().map(|m| m.len()).unwrap_or(0))
                 .fold(|| (0u64, 0usize), |(s, c), len| (s + len, c + 1))
                 .reduce(|| (0, 0), |(s1, c1), (s2, c2)| (s1 + s2, c1 + c2))
         }
@@ -265,7 +289,7 @@ impl CleanerEngine {
             return (0, 0);
         }
 
-        let files: Vec<(PathBuf, u64)> = WalkDir::new(path)
+        WalkDir::new(path)
             .min_depth(1)
             .into_iter()
             .filter_entry(|e| {
@@ -276,19 +300,13 @@ impl CleanerEngine {
                     true
                 }
             })
+            .par_bridge()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_file())
             .map(|e| {
-                let len = e.metadata().map(|m| m.len()).unwrap_or(0);
-                (e.into_path(), len)
-            })
-            .collect();
-
-        files
-            .into_par_iter()
-            .map(|(f, size)| {
-                if fs::remove_file(&f).is_ok() {
-                    (size, 1usize)
+                let len = e.path().symlink_metadata().map(|m| m.len()).unwrap_or(0);
+                if fs::remove_file(e.path()).is_ok() {
+                    (len, 1usize)
                 } else {
                     (0, 0)
                 }
@@ -299,28 +317,22 @@ impl CleanerEngine {
     pub fn clean_user_tmp() -> (u64, usize) {
         #[cfg(unix)]
         {
-            use std::os::unix::fs::MetadataExt;
             let current_uid = unsafe { libc::getuid() };
             let tmp = Path::new("/tmp");
-            let files: Vec<PathBuf> = WalkDir::new(tmp)
+            if !tmp.exists() {
+                return (0, 0);
+            }
+
+            WalkDir::new(tmp)
                 .min_depth(1)
                 .into_iter()
+                .filter_entry(|e| Self::is_safe_tmp_entry(e, current_uid))
+                .par_bridge()
                 .filter_map(|e| e.ok())
-                .filter(|e| {
-                    if let Ok(meta) = e.path().symlink_metadata() {
-                        meta.is_file() && meta.uid() == current_uid
-                    } else {
-                        false
-                    }
-                })
-                .map(|e| e.path().to_path_buf())
-                .collect();
-
-            files
-                .into_par_iter()
-                .map(|f| {
-                    let size = f.metadata().map(|m| m.len()).unwrap_or(0);
-                    if fs::remove_file(&f).is_ok() {
+                .filter(|e| e.file_type().is_file())
+                .map(|e| {
+                    let size = e.path().symlink_metadata().map(|m| m.len()).unwrap_or(0);
+                    if fs::remove_file(e.path()).is_ok() {
                         (size, 1usize)
                     } else {
                         (0, 0)
@@ -335,6 +347,14 @@ impl CleanerEngine {
     }
 
     pub fn clean_category(cat_id: &str) -> CleanResult {
+        Self::clean_category_checked(cat_id).unwrap_or(CleanResult {
+            freed_bytes: 0,
+            freed_mb: 0.0,
+            freed_files: 0,
+        })
+    }
+
+    pub fn clean_category_checked(cat_id: &str) -> Result<CleanResult, String> {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
         let home_p = PathBuf::from(&home);
 
@@ -347,7 +367,11 @@ impl CleanerEngine {
             "browser_cache" => Self::clean_dirs(&Self::browser_cache_dirs(&home_p)),
             "stremio_cache" => Self::clean_dirs(&Self::stremio_cache_dirs(&home_p)),
             "dev_cache" => Self::clean_dirs(&Self::dev_cache_dirs(&home_p)),
-            "flatpak_cache" => crate::cleaners::clean_flatpak_cache(&home_p.join(".var/app")),
+            "flatpak_cache" => {
+                let (app_b, app_c) = crate::cleaners::clean_flatpak_cache(&home_p.join(".var/app"));
+                let (sys_b, sys_c) = crate::cleaners::clean_system_flatpak_caches();
+                (app_b + sys_b, app_c + sys_c)
+            }
             "snap_cache" => Self::clean_dirs(&Self::snap_cache_dirs(&home_p.join("snap"))),
             "trash" => Self::clean_path(&home_p.join(".local/share/Trash")),
             "tmp" => Self::clean_user_tmp(),
@@ -358,7 +382,14 @@ impl CleanerEngine {
                     .filter(|p| p.exists())
                     .collect();
                 let (before_b, before_c) = Self::sum_dirs(&pkg_dirs);
-                let _ = HostBridge::run_privileged(&["sh", "-c", "apt-get clean 2>/dev/null || dnf clean all 2>/dev/null || pacman -Scc --noconfirm 2>/dev/null || true"]);
+                let (code, _, stderr) = HostBridge::run_privileged(&[
+                    "sh",
+                    "-c",
+                    "apt-get clean 2>/dev/null || dnf clean all 2>/dev/null || pacman -Scc --noconfirm 2>/dev/null",
+                ])?;
+                if code != 0 {
+                    return Err(format!("Package cache cleanup cancelled or failed (code {}): {}", code, stderr.trim()));
+                }
                 let _ = HostBridge::run_privileged(&["journalctl", "--vacuum-time=7d"]);
                 let (after_b, after_c) = Self::sum_dirs(&pkg_dirs);
                 (before_b.saturating_sub(after_b), before_c.saturating_sub(after_c))
@@ -366,10 +397,10 @@ impl CleanerEngine {
             _ => (0, 0),
         };
 
-        CleanResult {
+        Ok(CleanResult {
             freed_bytes: bytes,
             freed_mb: ((bytes as f64 / (1024.0 * 1024.0)) * 10.0).round() / 10.0,
             freed_files: count,
-        }
+        })
     }
 }

@@ -90,7 +90,7 @@ impl MithrandirWindow {
         let page_kernel_power = KernelPowerPage::build(Some(toast_overlay.clone()));
         let page_hardware = HardwarePage::build(Some(toast_overlay.clone()));
         let page_processes = ProcessesPage::build();
-        let page_services = ServicesPage::build();
+        let page_services = ServicesPage::build(Some(toast_overlay.clone()));
         let page_autostart = AutostartPage::build();
         let page_uninstaller = UninstallerPage::build();
         let page_btrfs = BtrfsPage::build();
@@ -448,7 +448,7 @@ impl MithrandirWindow {
                     .application_name("Mithrandir")
                     .application_icon("io.github.antux912012.Mithrandir")
                     .developer_name("Antonio De Gaetano")
-                    .version("1.2.1")
+                    .version(env!("CARGO_PKG_VERSION"))
                     .comments("Native Linux System Optimization, Cache Management, CachyOS Scheduler Controller & Hardware Power Manager in Rust (GTK4 & Libadwaita)")
                     .website("https://github.com/Antux912012/mithrandir")
                     .license_type(gtk4::License::Gpl30Only)

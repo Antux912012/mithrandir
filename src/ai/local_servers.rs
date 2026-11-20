@@ -42,13 +42,18 @@ impl LocalServerDetector {
         models
     }
 
-    /// Scans the 3 standard local runners (LM Studio, Ollama, llama.cpp).
+    /// Scans the 3 standard local runners (LM Studio, Ollama, llama.cpp) concurrently.
     pub fn scan_local_servers() -> Vec<LocalServerStatus> {
-        vec![
-            Self::check_lm_studio(),
-            Self::check_ollama(),
-            Self::check_llama_cpp(),
-        ]
+        std::thread::scope(|s| {
+            let h1 = s.spawn(Self::check_lm_studio);
+            let h2 = s.spawn(Self::check_ollama);
+            let h3 = s.spawn(Self::check_llama_cpp);
+            vec![
+                h1.join().unwrap_or_else(|_| Self::check_lm_studio()),
+                h2.join().unwrap_or_else(|_| Self::check_ollama()),
+                h3.join().unwrap_or_else(|_| Self::check_llama_cpp()),
+            ]
+        })
     }
 
     pub fn check_lm_studio() -> LocalServerStatus {

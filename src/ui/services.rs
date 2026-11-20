@@ -5,7 +5,7 @@ use gtk4::{
 };
 use libadwaita as adw;
 use adw::prelude::*;
-use adw::{ActionRow, Clamp, PreferencesGroup};
+use adw::{ActionRow, Clamp, PreferencesGroup, Toast, ToastOverlay};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
@@ -14,7 +14,7 @@ use crate::backend::services::{ServiceInfo, ServiceManager};
 pub struct ServicesPage;
 
 impl ServicesPage {
-    pub fn build() -> ScrolledWindow {
+    pub fn build(toast_overlay: Option<ToastOverlay>) -> ScrolledWindow {
         let scrolled = ScrolledWindow::builder()
             .vexpand(true)
             .hexpand(true)
@@ -128,6 +128,7 @@ impl ServicesPage {
                     let is_running = s.is_running;
                     let all_services_toggle = all_services.clone();
                     let populate_toggle = populate_self_rc.clone();
+                    let toast_toggle = toast_overlay.clone();
                     toggle_btn.connect_clicked(move |b| {
                         b.set_sensitive(false);
                         b.set_label(if is_running { "Stopping..." } else { "Starting..." });
@@ -135,14 +136,20 @@ impl ServicesPage {
                         let unit_run = unit_str.clone();
                         let (tx, rx) = async_channel::unbounded();
                         std::thread::spawn(move || {
-                            let _ = ServiceManager::manage_service(&unit_run, action);
+                            let res = ServiceManager::manage_service(&unit_run, action);
                             let updated = ServiceManager::list_services();
-                            let _ = tx.send_blocking(updated);
+                            let _ = tx.send_blocking((res, updated));
                         });
                         let all_s = all_services_toggle.clone();
                         let pop_rc = populate_toggle.clone();
+                        let toast_ref = toast_toggle.clone();
                         glib::MainContext::default().spawn_local(async move {
-                            if let Ok(updated) = rx.recv().await {
+                            if let Ok((res, updated)) = rx.recv().await {
+                                if let Err(e) = res {
+                                    if let Some(ref overlay) = toast_ref {
+                                        overlay.add_toast(Toast::new(&format!("Service action failed: {}", e)));
+                                    }
+                                }
                                 *all_s.borrow_mut() = updated;
                                 if let Some(ref f) = *pop_rc.borrow() {
                                     f();

@@ -42,8 +42,20 @@ impl BtrfsManager {
         list
     }
 
+    pub fn is_valid_snapshot_name(name: &str) -> bool {
+        !name.is_empty()
+            && !name.contains("..")
+            && name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+    }
+
     pub fn create_snapshot(name: &str) -> Result<(), String> {
-        let snap_path = format!("/.snapshots/{}", name);
+        let trimmed = name.trim();
+        if !Self::is_valid_snapshot_name(trimmed) {
+            return Err("Invalid snapshot name: use only letters, digits, '.', '-', or '_'".to_string());
+        }
+        let snap_path = format!("/.snapshots/{}", trimmed);
         let (code, _, stderr) = HostBridge::run_privileged(&["btrfs", "subvolume", "snapshot", "/", &snap_path])?;
         if code == 0 {
             Ok(())

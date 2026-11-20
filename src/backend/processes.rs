@@ -1,6 +1,9 @@
+use std::sync::{Mutex, OnceLock};
 use serde::{Deserialize, Serialize};
 use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System};
 use crate::backend::host_bridge::HostBridge;
+
+static PROC_SYSTEM: OnceLock<Mutex<System>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessItem {
@@ -19,7 +22,7 @@ impl ProcessManager {
     /// Lists active system processes with accurate instantaneous CPU% and RSS MB.
     pub fn list_processes() -> Vec<ProcessItem> {
         // Attempt fast and accurate host ps inspection
-        if let Ok((code, stdout, _)) = HostBridge::run_command("ps", &["-eo", "pid,user,%cpu,%mem,rss,comm", "--sort=-%mem"]) {
+        if let Ok((code, stdout, _)) = HostBridge::run_command("ps", &["-eo", "pid,user,%cpu,%mem,rss,comm,args", "--sort=-%mem"]) {
             if code == 0 && !stdout.trim().is_empty() {
                 let mut list = Vec::new();
                 for (idx, line) in stdout.lines().enumerate() {
@@ -34,16 +37,21 @@ impl ProcessManager {
                             let mem_pct = parts[3].parse::<f32>().unwrap_or(0.0);
                             let rss_kb = parts[4].parse::<f64>().unwrap_or(0.0);
                             let mem_mb = (rss_kb / 1024.0 * 10.0).round() / 10.0;
-                            let name = parts[5..].join(" ");
+                            let name = parts[5].to_string();
+                            let cmd = if parts.len() > 6 {
+                                parts[6..].join(" ")
+                            } else {
+                                name.clone()
+                            };
 
                             list.push(ProcessItem {
                                 pid,
-                                name: name.clone(),
+                                name,
                                 cpu_percent: cpu,
                                 mem_mb,
                                 mem_percent: mem_pct,
                                 user,
-                                cmd: name,
+                                cmd,
                             });
                         }
                     }
@@ -54,12 +62,17 @@ impl ProcessManager {
             }
         }
 
-        // Sysinfo fallback
-        let mut sys = System::new_with_specifics(
-            RefreshKind::nothing()
-                .with_processes(ProcessRefreshKind::everything())
-                .with_memory(MemoryRefreshKind::everything()),
-        );
+        // Persistent sysinfo fallback (preserves delta CPU% across refreshes)
+        let lock = PROC_SYSTEM.get_or_init(|| {
+            let mut s = System::new_with_specifics(
+                RefreshKind::nothing()
+                    .with_processes(ProcessRefreshKind::everything())
+                    .with_memory(MemoryRefreshKind::everything()),
+            );
+            s.refresh_processes(ProcessesToUpdate::All, true);
+            Mutex::new(s)
+        });
+        let mut sys = lock.lock().unwrap_or_else(|e| e.into_inner());
         sys.refresh_processes(ProcessesToUpdate::All, true);
         sys.refresh_memory();
 

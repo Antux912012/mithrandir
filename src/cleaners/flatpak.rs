@@ -167,11 +167,6 @@ pub fn scan_flatpak_cache_with_running(base_var_app_dir: &Path, running_apps: &H
         }
     }
 
-    // Also scan user and system Flatpak repository caches
-    let (sys_bytes, sys_count) = scan_system_flatpak_caches();
-    total_bytes += sys_bytes;
-    total_files += sys_count;
-
     (total_bytes, total_files)
 }
 
@@ -203,11 +198,6 @@ pub fn clean_flatpak_cache_with_running(base_var_app_dir: &Path, running_apps: &
             }
         }
     }
-
-    // Also clean user and system Flatpak repository caches
-    let (sys_bytes, sys_count) = clean_system_flatpak_caches();
-    freed_bytes += sys_bytes;
-    freed_files += sys_count;
 
     (freed_bytes, freed_files)
 }
@@ -307,9 +297,13 @@ pub fn get_default_var_app_dir() -> PathBuf {
 }
 
 pub fn scan_default_flatpak_cache() -> (u64, usize) {
-    scan_flatpak_cache(&get_default_var_app_dir())
+    let (app_b, app_c) = scan_flatpak_cache(&get_default_var_app_dir());
+    let (sys_b, sys_c) = scan_system_flatpak_caches();
+    (app_b + sys_b, app_c + sys_c)
 }
 
 pub fn clean_default_flatpak_cache() -> (u64, usize) {
-    clean_flatpak_cache(&get_default_var_app_dir())
+    let (app_b, app_c) = clean_flatpak_cache(&get_default_var_app_dir());
+    let (sys_b, sys_c) = clean_system_flatpak_caches();
+    (app_b + sys_b, app_c + sys_c)
 }

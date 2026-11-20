@@ -142,35 +142,49 @@ impl CleanerPage {
                 .map(|r| r.cat_id.clone())
                 .collect();
 
-            let (tx, rx) = async_channel::unbounded::<f64>();
+            let (tx, rx) = async_channel::unbounded::<(f64, Vec<String>, Vec<String>)>();
             let c_btn = clean_btn_for_clean.clone();
             let r_state = rows_state_for_clean.clone();
 
             glib::MainContext::default().spawn_local(async move {
-                if let Ok(freed) = rx.recv().await {
+                if let Ok((freed, cleaned_ids, errors)) = rx.recv().await {
                     c_btn.set_sensitive(false);
                     c_btn.set_label("Clean Selected");
 
                     let rows = r_state.borrow();
                     for r in rows.iter() {
-                        if r.check.is_active() {
+                        if cleaned_ids.contains(&r.cat_id) {
                             r.size_label.set_label("Cleaned (0 MB)");
+                        } else if r.check.is_active() {
+                            r.size_label.set_label("Skipped / Failed");
                         }
                     }
+                    let summary = if errors.is_empty() {
+                        format!("Freed {:.1} MB of system clutter.", freed)
+                    } else {
+                        format!("Freed {:.1} MB ({} item(s) failed).", freed, errors.len())
+                    };
                     crate::backend::indicator::NotificationManager::send_notification(
                         "🧹 Clean Complete",
-                        &format!("Freed {:.1} MB of system clutter.", freed),
+                        &summary,
                     );
                 }
             });
 
             std::thread::spawn(move || {
                 let mut freed_mb = 0.0;
+                let mut cleaned_ids = Vec::new();
+                let mut errors = Vec::new();
                 for id in selected_ids {
-                    let res = CleanerEngine::clean_category(&id);
-                    freed_mb += res.freed_mb;
+                    match CleanerEngine::clean_category_checked(&id) {
+                        Ok(res) => {
+                            freed_mb += res.freed_mb;
+                            cleaned_ids.push(id);
+                        }
+                        Err(e) => errors.push(e),
+                    }
                 }
-                let _ = tx.send_blocking(freed_mb);
+                let _ = tx.send_blocking((freed_mb, cleaned_ids, errors));
             });
         });
 

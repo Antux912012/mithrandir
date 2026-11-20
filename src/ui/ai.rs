@@ -54,9 +54,8 @@ fn provider_index_from_id(id: &str) -> u32 {
 
 fn execute_ai_fix_command(cmd: &str) -> Result<(i32, String, String), String> {
     let trimmed = cmd.trim();
-    if trimmed.contains("sudo ") {
-        let elevated = trimmed.replace("sudo ", "");
-        HostBridge::run_privileged(&["sh", "-c", &elevated])
+    if let Some(elevated) = trimmed.strip_prefix("sudo ") {
+        HostBridge::run_privileged(&["sh", "-c", elevated.trim_start()])
     } else {
         HostBridge::run_command("sh", &["-c", trimmed])
     }

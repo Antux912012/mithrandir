@@ -7,27 +7,37 @@ impl SafetyGuard {
     pub fn redact_pii(text: &str) -> String {
         let mut result = text.to_string();
 
-        // Redact active username
+        // Redact active username and $HOME
         if let Ok(user) = env::var("USER") {
             if !user.is_empty() {
                 let pattern = format!("/home/{}", user);
                 result = result.replace(&pattern, "/home/[REDACTED_USER]");
             }
         }
+        if let Ok(home) = env::var("HOME") {
+            if !home.is_empty() && home != "/" && !home.starts_with("/home/") {
+                result = result.replace(&home, "/home/[REDACTED_USER]");
+            }
+        }
 
-        // Generic /home/<user> fallback
+        // Generic /home/<user> fallback (redacts all occurrences on each line)
         let mut lines = Vec::new();
         for line in result.lines() {
             let mut modified_line = line.to_string();
-            if let Some(pos) = modified_line.find("/home/") {
+            let mut search_from = 0usize;
+            while let Some(rel_pos) = modified_line[search_from..].find("/home/") {
+                let pos = search_from + rel_pos;
                 let rest = &modified_line[pos + 6..];
                 if let Some(end_slash) = rest.find('/') {
                     let user_part = &rest[..end_slash];
                     if !user_part.is_empty() && user_part != "[REDACTED_USER]" {
                         let full_user_path = format!("/home/{}", user_part);
                         modified_line = modified_line.replace(&full_user_path, "/home/[REDACTED_USER]");
+                        search_from = pos + "/home/[REDACTED_USER]".len();
+                        continue;
                     }
                 }
+                search_from = pos + 6;
             }
             lines.push(modified_line);
         }

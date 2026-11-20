@@ -557,12 +557,28 @@ impl DashboardPage {
             });
         }
 
-        // Non-Blocking Background Telemetry Refresh Loop (Every 3 seconds)
+        // Non-Blocking Background Telemetry Refresh Loop (Every 3 seconds when visible)
         {
             let (tx, rx) = mpsc::channel::<TelemetrySnapshot>();
+            let is_visible = Arc::new(AtomicBool::new(true));
+            let is_visible_bg = is_visible.clone();
+            let is_visible_ui = is_visible.clone();
+
+            let ram_map_check = ram_label.clone();
+            glib::timeout_add_local(Duration::from_millis(500), move || {
+                is_visible_ui.store(ram_map_check.is_mapped(), Ordering::Relaxed);
+                glib::ControlFlow::Continue
+            });
 
             std::thread::spawn(move || {
+                let mut tick: u64 = 0;
+                let mut cached_temp: Option<(u64, f64, String)> = None;
                 loop {
+                    if !is_visible_bg.load(Ordering::Relaxed) {
+                        std::thread::sleep(Duration::from_secs(1));
+                        continue;
+                    }
+
                     let summary = SystemMonitor::get_system_summary();
                     let cpu = SystemMonitor::get_cpu_info();
                     let mem = SystemMonitor::get_memory_info();
@@ -570,7 +586,25 @@ impl DashboardPage {
                     let battery = SystemMonitor::get_battery_info();
                     let net = SystemMonitor::get_network_rate();
                     let gpus = SystemMonitor::get_gpus_info();
-                    let boost_status = SmartBoostEngine::get_boost_status();
+
+                    // Scan /tmp and ~/.cache/thumbnails only every 30s (10 ticks) to avoid constant disk I/O
+                    let boost_status = if tick % 10 == 0 || cached_temp.is_none() {
+                        let st = SmartBoostEngine::get_boost_status();
+                        cached_temp = Some((st.temp_bytes, st.temp_size_mb, st.temp_size_str.clone()));
+                        st
+                    } else {
+                        let (tb, tm, ts) = cached_temp.as_ref().unwrap().clone();
+                        BoostStatus {
+                            ram_percent: mem.percent,
+                            ram_used_mb: mem.used_mb,
+                            ram_total_mb: mem.total_mb,
+                            temp_bytes: tb,
+                            temp_size_mb: tm,
+                            temp_count: 0,
+                            temp_size_str: ts,
+                        }
+                    };
+                    tick = tick.wrapping_add(1);
 
                     let snapshot = TelemetrySnapshot {
                         summary,

@@ -297,7 +297,7 @@ fn main() {
 
     #[cfg(not(feature = "gui"))]
     {
-        println!("Mithrandir v1.1.2 (GNU/Linux System Cleaner, Optimizer & Kernel Manager in Rust)");
+        println!("Mithrandir v{} (GNU/Linux System Cleaner, Optimizer & Kernel Manager in Rust)", env!("CARGO_PKG_VERSION"));
         println!("Usage:");
         println!("  mithrandir                 Launch Libadwaita GUI");
         println!("  mithrandir --smart-boost   One-click RAM and cache boost");

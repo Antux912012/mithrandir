@@ -88,11 +88,14 @@ pub fn apply_preset(preset: PowerPreset) -> Result<(), String> {
     // 2. Hardware Tunables (sysfs & procfs)
     // Attempt direct write first
     let mut needs_privileged_helper = false;
+    let mut non_perm_errors = Vec::new();
 
     if bore::is_bore_supported() {
         if let Err(e) = bore::set_bore_state(bore_val) {
             if is_permission_error(&e) {
                 needs_privileged_helper = true;
+            } else {
+                non_perm_errors.push(e);
             }
         }
     }
@@ -100,12 +103,16 @@ pub fn apply_preset(preset: PowerPreset) -> Result<(), String> {
     if let Err(e) = profiles::set_governor(governor) {
         if is_permission_error(&e) {
             needs_privileged_helper = true;
+        } else {
+            non_perm_errors.push(e);
         }
     }
 
     if let Err(e) = profiles::set_epp(epp) {
         if is_permission_error(&e) {
             needs_privileged_helper = true;
+        } else {
+            non_perm_errors.push(e);
         }
     }
 
@@ -113,15 +120,27 @@ pub fn apply_preset(preset: PowerPreset) -> Result<(), String> {
         if let Err(e) = profiles::set_turbo_boost(boost) {
             if is_permission_error(&e) {
                 needs_privileged_helper = true;
+            } else {
+                non_perm_errors.push(e);
             }
         }
     }
 
-    let _ = profiles::set_aspm_policy(aspm);
+    if let Err(e) = profiles::set_aspm_policy(aspm) {
+        if is_permission_error(&e) {
+            needs_privileged_helper = true;
+        } else {
+            non_perm_errors.push(e);
+        }
+    }
 
     // 4. If direct write needed root elevation, call privileged helper via pkexec
     if needs_privileged_helper {
         run_privileged_helper(Some(bore_val), Some(governor), Some(epp), Some(boost), Some(aspm), false)?;
+    }
+
+    if !non_perm_errors.is_empty() && !needs_privileged_helper {
+        return Err(non_perm_errors.join("; "));
     }
 
     set_active_preset(preset);
@@ -210,32 +229,50 @@ pub fn apply_kernel_state_privileged(
     aspm: Option<&str>,
     persist: bool,
 ) -> Result<(), String> {
+    let mut errors = Vec::new();
+
     if let Some(b) = bore {
         if bore::is_bore_supported() {
-            let _ = bore::set_bore_state(b);
+            if let Err(e) = bore::set_bore_state(b) {
+                errors.push(e);
+            }
         }
         if persist {
-            let _ = bore::persist_bore_state(b);
+            if let Err(e) = bore::persist_bore_state(b) {
+                errors.push(e);
+            }
         }
     }
 
     if let Some(gov) = governor {
-        let _ = profiles::set_governor(gov);
+        if let Err(e) = profiles::set_governor(gov) {
+            errors.push(e);
+        }
     }
 
     if let Some(ep) = epp {
-        let _ = profiles::set_epp(ep);
+        if let Err(e) = profiles::set_epp(ep) {
+            errors.push(e);
+        }
     }
 
     if let Some(bt) = boost {
         if profiles::is_turbo_boost_supported() {
-            let _ = profiles::set_turbo_boost(bt);
+            if let Err(e) = profiles::set_turbo_boost(bt) {
+                errors.push(e);
+            }
         }
     }
 
     if let Some(asp) = aspm {
-        let _ = profiles::set_aspm_policy(asp);
+        if let Err(e) = profiles::set_aspm_policy(asp) {
+            errors.push(e);
+        }
     }
 
-    Ok(())
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
 }
