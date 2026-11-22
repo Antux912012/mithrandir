@@ -191,7 +191,8 @@ impl PreferencesDialog {
             ("autostart", "Startup Applications", "system-run-symbolic"),
             ("uninstaller", "Software Uninstaller", "system-software-install-symbolic"),
             ("btrfs", "BTRFS Snapshots", "drive-harddisk-symbolic"),
-            ("grub", "GRUB Bootloader", "preferences-system-symbolic"),
+            ("grub", "GRUB & Coreboot", "preferences-system-symbolic"),
+            ("plymouth", "Plymouth Splash", "preferences-desktop-wallpaper-symbolic"),
         ];
 
         let disabled_tabs = settings.disabled_tabs.clone();

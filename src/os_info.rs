@@ -126,7 +126,10 @@ pub fn get_admin_group() -> &'static str {
 /// Checks if the host has an immutable root filesystem (e.g., NixOS or ostree).
 pub fn is_immutable_system() -> bool {
     let details = detect_os();
-    details.distro == LinuxDistro::NixOS || std::path::Path::new("/run/current-system").exists()
+    details.distro == LinuxDistro::NixOS
+        || std::path::Path::new("/run/current-system").exists()
+        || std::path::Path::new("/run/ostree-booted").exists()
+        || std::path::Path::new("/run/host/run/ostree-booted").exists()
 }
 
 /// Checks if SELinux is active (common on Fedora, RHEL, CentOS, openSUSE).

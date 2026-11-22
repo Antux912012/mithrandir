@@ -6,7 +6,9 @@ pub mod autostart;
 pub mod services;
 pub mod packages;
 pub mod btrfs;
+pub mod coreboot;
 pub mod grub;
+pub mod plymouth;
 pub mod indicator;
 pub mod host_bridge;
 pub mod distro;
@@ -22,7 +24,12 @@ pub use autostart::{AutostartManager, AutostartEntry};
 pub use services::{ServiceManager, ServiceInfo};
 pub use packages::{PackageManager, PackageItem};
 pub use btrfs::{BtrfsManager, BtrfsSnapshot};
-pub use grub::{GrubManager, GrubConfig};
+pub use coreboot::{CorebootCmosOption, CorebootManager, CorebootPersonalisationConfig, CorebootStatus};
+pub use grub::{GrubConfig, GrubFontInfo, GrubManager, GrubMenuEntry, GrubPersonalisation, GrubThemeInfo};
+pub use plymouth::{
+    InitramfsBackend, PlymouthConfig, PlymouthManager, PlymouthReadiness, PlymouthStatus,
+    PlymouthTheme,
+};
 pub use indicator::{NotificationManager, BackgroundDaemon};
 pub use host_bridge::HostBridge;
 pub use distro::{DistroDetector, DistroFamily};

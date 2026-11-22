@@ -6,8 +6,11 @@ pub struct SystemInfo {
     pub vendor: String,
     pub product_name: String,
     pub product_version: String,
+    pub bios_vendor: String,
     pub bios_version: String,
     pub bios_date: String,
+    pub ec_firmware_release: String,
+    pub is_coreboot: bool,
     pub board_name: String,
     pub chassis_type: String,
     pub cpu_model: String,
@@ -20,8 +23,17 @@ impl SystemInfo {
         let vendor = read_sysfs_string("/sys/class/dmi/id/sys_vendor").unwrap_or_else(|| "Unknown Vendor".into());
         let product_name = read_sysfs_string("/sys/class/dmi/id/product_name").unwrap_or_else(|| "Unknown Model".into());
         let product_version = read_sysfs_string("/sys/class/dmi/id/product_version").unwrap_or_else(|| "Standard".into());
+        let bios_vendor = read_sysfs_string("/sys/class/dmi/id/bios_vendor").unwrap_or_else(|| "Unknown Vendor".into());
         let bios_version = read_sysfs_string("/sys/class/dmi/id/bios_version").unwrap_or_else(|| "Unknown BIOS".into());
         let bios_date = read_sysfs_string("/sys/class/dmi/id/bios_date").unwrap_or_else(|| "Unknown Date".into());
+        let ec_firmware_release = read_sysfs_string("/sys/class/dmi/id/ec_firmware_release").unwrap_or_else(|| "Not reported".into());
+        let has_cb_sysfs = resolve_sys_path("/sys/firmware/coreboot").exists();
+        let is_coreboot = has_cb_sysfs
+            || bios_vendor.to_lowercase().contains("coreboot")
+            || bios_vendor.to_lowercase().contains("dasharo")
+            || bios_vendor.to_lowercase().contains("mrchromebox")
+            || bios_vendor.to_lowercase().contains("libreboot")
+            || bios_version.to_lowercase().contains("coreboot");
         let board_name = read_sysfs_string("/sys/class/dmi/id/board_name").unwrap_or_else(|| "Unknown Board".into());
         let raw_chassis = read_sysfs_string("/sys/class/dmi/id/chassis_type").unwrap_or_else(|| "3".into());
         let chassis_type = decode_chassis_type(&raw_chassis);
@@ -32,8 +44,11 @@ impl SystemInfo {
             vendor,
             product_name,
             product_version,
+            bios_vendor,
             bios_version,
             bios_date,
+            ec_firmware_release,
+            is_coreboot,
             board_name,
             chassis_type,
             cpu_model,

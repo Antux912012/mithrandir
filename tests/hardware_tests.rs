@@ -144,3 +144,90 @@ fn test_network_pci_identification_and_collection() {
         assert!(!adapter.chipset_name.is_empty());
     }
 }
+
+#[test]
+fn test_battery_report_sysfs_parsing_and_export() {
+    use mithrandir::hardware::battery::{parse_active_bracket_token, BatteryFirmwareInfo};
+
+    assert_eq!(parse_active_bracket_token("[auto] inhibit-charge force-discharge"), "auto");
+    assert_eq!(BatteryInfo::assess_cycle_wear(42, true), "Excellent (Low Cycles)");
+    assert_eq!(BatteryInfo::assess_cycle_wear(250, true), "Good (Healthy Wear)");
+    assert_eq!(BatteryInfo::assess_cycle_wear(750, true), "High Wear");
+    assert_eq!(BatteryInfo::assess_cycle_wear(0, false), "Not reported by firmware");
+    assert_eq!(BatteryInfo::estimate_cell_count(11.4), 3);
+    assert_eq!(BatteryInfo::estimate_cell_count(15.2), 4);
+    assert_eq!(BatteryInfo::format_duration(185), "3h 5m");
+
+    let tmp = tempfile::tempdir().unwrap();
+    let bat_dir = tmp.path().join("BAT1");
+    std::fs::create_dir_all(bat_dir.join("hwmon0")).unwrap();
+
+    std::fs::write(bat_dir.join("type"), "Battery\n").unwrap();
+    std::fs::write(bat_dir.join("present"), "1\n").unwrap();
+    std::fs::write(bat_dir.join("model_name"), "LNV-01AV436\n").unwrap();
+    std::fs::write(bat_dir.join("manufacturer"), "SMP\n").unwrap();
+    std::fs::write(bat_dir.join("serial_number"), "12345\n").unwrap();
+    std::fs::write(bat_dir.join("technology"), "Li-poly\n").unwrap();
+    std::fs::write(bat_dir.join("status"), "Discharging\n").unwrap();
+    std::fs::write(bat_dir.join("capacity"), "75\n").unwrap();
+    std::fs::write(bat_dir.join("capacity_level"), "Normal\n").unwrap();
+    std::fs::write(bat_dir.join("energy_now"), "30000000\n").unwrap();
+    std::fs::write(bat_dir.join("energy_full"), "40000000\n").unwrap();
+    std::fs::write(bat_dir.join("energy_full_design"), "50000000\n").unwrap();
+    std::fs::write(bat_dir.join("voltage_now"), "11800000\n").unwrap();
+    std::fs::write(bat_dir.join("voltage_min_design"), "11400000\n").unwrap();
+    std::fs::write(bat_dir.join("power_now"), "10000000\n").unwrap();
+    std::fs::write(bat_dir.join("cycle_count"), "148\n").unwrap();
+    std::fs::write(bat_dir.join("charge_control_start_threshold"), "40\n").unwrap();
+    std::fs::write(bat_dir.join("charge_control_end_threshold"), "80\n").unwrap();
+    std::fs::write(bat_dir.join("charge_behaviour"), "[auto] inhibit-charge\n").unwrap();
+    std::fs::write(bat_dir.join("hwmon0/temp1_input"), "31500\n").unwrap();
+
+    let fw = BatteryFirmwareInfo {
+        ec_firmware_release: "1.34".into(),
+        bios_vendor: "LENOVO".into(),
+        bios_version: "N2CET67W".into(),
+        bios_date: "04/12/2025".into(),
+        acpi_device: String::new(),
+        manufacture_date: None,
+    };
+
+    let bat = BatteryInfo::from_sysfs_with_context(
+        &bat_dir,
+        "Lenovo ThinkPad P52",
+        &(Some(false), Some("ACAD".into())),
+        &fw,
+    )
+    .expect("should parse mock battery");
+
+    assert_eq!(bat.name, "BAT1");
+    assert_eq!(bat.cycle_count, 148);
+    assert!(bat.cycle_count_reported);
+    assert!((bat.health_percent - 80.0).abs() < 0.1);
+    assert!((bat.wear_percent - 20.0).abs() < 0.1);
+    assert!((bat.voltage_now_v - 11.8).abs() < 0.01);
+    assert!((bat.power_rate_w - 10.0).abs() < 0.01);
+    assert!(bat.current_now_ma > 800.0);
+    assert_eq!(bat.charge_start_threshold, Some(40));
+    assert_eq!(bat.charge_end_threshold, Some(80));
+    assert_eq!(bat.charge_behaviour.as_deref(), Some("auto"));
+    assert_eq!(bat.temperature_c, Some(31.5));
+    assert_eq!(bat.time_remaining_minutes, Some(180));
+    assert_eq!(bat.firmware.ec_firmware_release, "1.34");
+    assert_eq!(bat.estimated_cells, 3);
+
+    let txt = bat.generate_text_report("Lenovo ThinkPad P52");
+    assert!(txt.contains("148 cycles"));
+    assert!(txt.contains("1.34"));
+    assert!(txt.contains("11.800 V"));
+    assert!(txt.contains("Start 40% / Stop 80%"));
+
+    let out_file = tmp.path().join("battery-report.md");
+    let saved = BatteryInfo::export_report_to_file(&[bat], "Lenovo ThinkPad P52", &out_file)
+        .expect("export should succeed");
+    assert_eq!(saved, out_file.to_string_lossy());
+    let md = std::fs::read_to_string(&out_file).unwrap();
+    assert!(md.contains("# Mithrandir Battery Diagnostic Report"));
+    assert!(md.contains("EC Firmware Release"));
+    assert!(md.contains("148"));
+}

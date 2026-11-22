@@ -118,7 +118,7 @@ fn populate_hardware_stack(stack: &adw::ViewStack, overlay: Option<&adw::ToastOv
 
     // Build Pages
     let overview_page = build_overview_view(&sys_info, &batteries, &mem_info, &disks, &displays, overlay);
-    let battery_page = build_battery_view(&batteries, overlay);
+    let battery_page = build_battery_view(&batteries, &dev_model, overlay);
     let storage_page = build_storage_view(&disks, overlay);
     let memory_page = build_memory_view(&mem_info, overlay);
     let display_page = build_display_view(&displays, overlay);

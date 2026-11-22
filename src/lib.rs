@@ -33,7 +33,9 @@ pub use cleaners::{
 
 pub use backend::{
     AppSettings, AutostartManager, BackgroundDaemon, BatteryInfo, BtrfsManager, CleanCategory,
-    CleanerEngine, DiagnosticsCollector, DistroDetector, DistroFamily, GraphicsCapabilities,
-    GraphicsManager, GrubManager, HostBridge, NotificationManager, PackageManager, ProcessManager,
-    ServiceManager, SmartBoostEngine, SystemMonitor,
+    CleanerEngine, CorebootManager, CorebootPersonalisationConfig, CorebootStatus,
+    DiagnosticsCollector, DistroDetector, DistroFamily, GraphicsCapabilities, GraphicsManager,
+    GrubConfig, GrubManager, GrubPersonalisation, HostBridge, InitramfsBackend,
+    NotificationManager, PackageManager, PlymouthConfig, PlymouthManager, PlymouthReadiness,
+    PlymouthStatus, PlymouthTheme, ProcessManager, ServiceManager, SmartBoostEngine, SystemMonitor,
 };

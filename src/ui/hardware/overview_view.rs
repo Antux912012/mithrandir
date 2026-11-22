@@ -79,7 +79,15 @@ pub fn build_overview_view(
 
     // Battery
     if let Some(bat) = batteries.first() {
-        let bat_sub = format!("{:.1}% Health ({}) — {:.1} Wh remaining", bat.health_percent, bat.status, bat.energy_now_wh);
+        let cycle_str = if bat.cycle_count_reported {
+            format!(" • {} cycles", bat.cycle_count)
+        } else {
+            String::new()
+        };
+        let bat_sub = format!(
+            "{:.1}% Health ({}) — {:.1} Wh remaining • {:.2} V{}",
+            bat.health_percent, bat.status, bat.energy_now_wh, bat.voltage_now_v, cycle_str
+        );
         let bat_row = adw::ActionRow::builder().title("Battery Status").subtitle(&bat_sub).use_markup(false).build();
         let bat_icon = if bat.health_percent > 70.0 { "battery-good-symbolic" } else { "battery-caution-symbolic" };
         bat_row.add_prefix(&gtk4::Image::from_icon_name(bat_icon));
@@ -101,9 +109,13 @@ pub fn build_overview_view(
         .title("Firmware &amp; Motherboard")
         .build();
 
-    let bios_sub = format!("Version {} (Released {})", sys.bios_version, sys.bios_date);
+    let fw_tag = if sys.is_coreboot { " [Coreboot]" } else { "" };
+    let bios_sub = format!("{} • Version {} (Released {}){}", sys.bios_vendor, sys.bios_version, sys.bios_date, fw_tag);
     let bios_row = make_copy_row("UEFI / BIOS Firmware", &bios_sub, &sys.bios_version, overlay, Some("application-x-firmware-symbolic"));
     fw_grp.add(&bios_row);
+
+    let ec_row = make_copy_row("Embedded Controller (EC) Firmware", &sys.ec_firmware_release, &sys.ec_firmware_release, overlay, Some("preferences-system-symbolic"));
+    fw_grp.add(&ec_row);
 
     let board_row = adw::ActionRow::builder()
         .title("Motherboard ID")

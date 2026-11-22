@@ -20,6 +20,7 @@ use crate::ui::dashboard::DashboardPage;
 use crate::ui::grub::GrubPage;
 use crate::ui::hardware::HardwarePage;
 use crate::ui::kernel_power::KernelPowerPage;
+use crate::ui::plymouth::PlymouthPage;
 use crate::ui::preferences::PreferencesDialog;
 use crate::ui::processes::ProcessesPage;
 use crate::ui::services::ServicesPage;
@@ -95,6 +96,7 @@ impl MithrandirWindow {
         let page_uninstaller = UninstallerPage::build();
         let page_btrfs = BtrfsPage::build();
         let page_grub = GrubPage::build(Some(toast_overlay.clone()));
+        let page_plymouth = PlymouthPage::build(Some(toast_overlay.clone()));
 
         stack.add_titled(&page_dashboard, Some("dashboard"), "Overview");
         stack.add_titled(&page_cleaner, Some("cleaner"), "Smart Cleaner");
@@ -107,6 +109,7 @@ impl MithrandirWindow {
         stack.add_titled(&page_uninstaller, Some("uninstaller"), "Uninstaller");
         stack.add_titled(&page_btrfs, Some("btrfs"), "BTRFS Snapshots");
         stack.add_titled(&page_grub, Some("grub"), "GRUB Bootloader");
+        stack.add_titled(&page_plymouth, Some("plymouth"), "Plymouth Splash");
 
         content_toolbar.set_content(Some(&stack));
         let content_nav_page = NavigationPage::builder()
@@ -218,9 +221,16 @@ impl MithrandirWindow {
             },
             NavSpec {
                 id: "grub",
-                label: "GRUB Bootloader",
-                subtitle: "Kernel boot parameters & timeout",
+                label: "GRUB & Coreboot",
+                subtitle: "Boot parameters, theming, fonts, resolution & Coreboot",
                 icon: "preferences-system-symbolic",
+                section: None,
+            },
+            NavSpec {
+                id: "plymouth",
+                label: "Plymouth Splash",
+                subtitle: "Boot splash themes, preview & initramfs rebuild",
+                icon: "preferences-desktop-wallpaper-symbolic",
                 section: None,
             },
         ];

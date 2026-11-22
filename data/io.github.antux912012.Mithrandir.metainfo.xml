@@ -91,6 +91,17 @@
   </branding>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="1.4.0" date="2026-11-22">
+      <description>
+        <p>Mithrandir v1.4.0 Plymouth Boot Splash, Coreboot &amp; GRUB Personalisation, and Battery Diagnostics Release:</p>
+        <ul>
+          <li>Plymouth Boot Splash Manager: Added full Plymouth theme discovery, thumbnail previews, bounded 6s live preview, custom archive import (.tar.gz/.tar.xz/.zip), streaming initramfs rebuilds (update-initramfs, dracut, mkinitcpio, booster), GRUB quiet splash readiness checks, and one-click backup rollback.</li>
+          <li>GRUB Bug Fixes &amp; Visual Personalisation: Fixed submenu indexing (1&gt;0), BootLoaderSpec (BLS) entry parsing, negative timeout (-1) clamping, duplicate key handling, Flatpak backup overwrites, and single-prompt atomic pkexec writes; added GRUB theme/wallpaper/color/font (.pf2 converter)/resolution controls.</li>
+          <li>Coreboot Firmware &amp; Payload Support: Added DMI/sysfs Coreboot detection (Dasharo, MrChromebox, Libreboot, System76, Star Labs), live nvramtool CMOS option editing, CBFS bootsplash staging commands, and Coreboot GRUB2 payload theming snippets.</li>
+          <li>Battery Diagnostic Report: Expanded Hardware Battery tab with charge/discharge cycle wear ratings, live/nominal/max voltage rails, current/power draw, charge thresholds, temperature, EC/BIOS/ACPI firmware info, and Markdown report copy/export.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.3.2" date="2026-11-20">
       <description>
         <p>Mithrandir v1.3.2 Reliability, Security &amp; Performance Release (by Antonio De Gaetano, developer of Imladris and RecGo):</p>

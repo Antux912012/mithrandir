@@ -86,6 +86,58 @@ fn main() {
         return;
     }
 
+    if args.iter().any(|a| a == "--plymouth-status") {
+        let st = mithrandir::PlymouthManager::detect();
+        println!("🎨 Plymouth Boot Splash Status");
+        println!("  Active Theme:       {}", st.config.active_theme);
+        println!("  Initramfs Backend:  {}", st.initramfs_backend.label());
+        println!("  ShowDelay / Timeout: {}s / {}s", st.config.show_delay_secs, st.config.device_timeout_secs);
+        println!("  Installed Themes:   {}", st.themes.len());
+        for t in &st.themes {
+            println!("    {} {} ({})", if t.is_active { "*" } else { "-" }, t.id, t.module_name);
+        }
+        if !st.readiness.warnings.is_empty() {
+            println!("  Warnings:");
+            for w in &st.readiness.warnings {
+                println!("    ! {}", w);
+            }
+        }
+        return;
+    }
+
+    if let Some(pos) = args.iter().position(|a| a == "--plymouth-apply") {
+        let Some(theme_id) = args.get(pos + 1) else {
+            eprintln!("Usage: mithrandir --plymouth-apply <theme-id>");
+            std::process::exit(1);
+        };
+        match mithrandir::PlymouthManager::apply_theme_streaming(theme_id, 0, 8, |line| {
+            println!("{}", line);
+        }) {
+            Ok(_) => {
+                println!("✅ Plymouth theme '{}' applied and initramfs rebuilt.", theme_id);
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("❌ Plymouth apply failed: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    if args.iter().any(|a| a == "--battery-report") {
+        let sys = mithrandir::hardware::SystemInfo::collect();
+        let dev_model = sys.full_device_name();
+        let batteries = mithrandir::hardware::battery::BatteryInfo::collect_all(&dev_model);
+        if batteries.is_empty() {
+            println!("No internal battery detected on this system ({}).", dev_model);
+        } else {
+            for bat in &batteries {
+                println!("{}\n", bat.generate_text_report(&dev_model));
+            }
+        }
+        return;
+    }
+
     if args.iter().any(|a| a == "--monitor") {
         println!("📊 Mithrandir System Telemetry (Rust Engine)");
         let mem = SystemMonitor::get_memory_info();

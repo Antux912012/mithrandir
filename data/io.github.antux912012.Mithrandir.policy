@@ -15,4 +15,15 @@
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/mithrandir</annotate>
   </action>
+
+  <action id="io.github.antux912012.Mithrandir.manage-plymouth">
+    <description>Manage Plymouth Boot Splash Themes and Initramfs</description>
+    <message>Authentication is required to change Plymouth boot splash themes and rebuild initramfs</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/mithrandir</annotate>
+  </action>
 </policyconfig>
